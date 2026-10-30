@@ -13,6 +13,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.middlew
 import { apiRateLimiter } from './middleware/rateLimiter.middleware'
 import { mongoSanitize } from './middleware/sanitize.middleware'
 import rootRouter from './routes'
+import { getHealth } from './controllers/health.controller'
 import { initSocketServer } from './sockets/socketHandler'
 
 export const createApp = (): { app: Express; server: http.Server } => {
@@ -36,12 +37,16 @@ export const createApp = (): { app: Express; server: http.Server } => {
       version: '1.0.0',
       status: 'active',
       endpoints: {
-        health: '/api/v1/health',
+        health: '/health',
+        apiHealth: '/api/v1/health',
         meetings: '/api/v1/meetings',
         aiSummaries: '/api/v1/ai/summarize',
       },
     })
   })
+
+  // Direct top-level health check endpoint for cloud load balancers & orchestrators
+  app.get('/health', getHealth)
 
   // API Routes with rate limiting
   app.use('/api', apiRateLimiter, rootRouter)

@@ -24,14 +24,34 @@ function onRefreshed(token: string) {
   refreshSubscribers = []
 }
 
+export function buildApiUrl(endpoint: string): string {
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  // If API_BASE_URL is relative (e.g. '/api')
+  if (API_BASE_URL.startsWith('/')) {
+    if (normalizedEndpoint.startsWith('/api')) {
+      return normalizedEndpoint
+    }
+    const cleanBase = API_BASE_URL.replace(/\/+$/, '')
+    return `${cleanBase}${normalizedEndpoint}`
+  }
+
+  // If API_BASE_URL is absolute (e.g. 'https://backend.com' or 'https://backend.com/api')
+  const baseWithoutTrailingSlash = API_BASE_URL.replace(/\/+$/, '')
+  if (normalizedEndpoint.startsWith('/api')) {
+    const rootDomain = baseWithoutTrailingSlash.replace(/\/api$/, '')
+    return `${rootDomain}${normalizedEndpoint}`
+  }
+  const prefix = baseWithoutTrailingSlash.endsWith('/api')
+    ? baseWithoutTrailingSlash
+    : `${baseWithoutTrailingSlash}/api`
+  return `${prefix}${normalizedEndpoint}`
+}
+
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  // Normalize endpoint URL: support both relative "/auth/login" or full path
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
-  const base = endpoint.startsWith('/api') ? '' : API_BASE_URL
-  const url = `${base}${normalizedEndpoint}`
+  const url = buildApiUrl(endpoint)
 
   const headers = new Headers(options.headers || {})
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -55,7 +75,7 @@ export async function apiRequest<T>(
     if (!isRefreshing) {
       isRefreshing = true
       try {
-        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        const refreshRes = await fetch(buildApiUrl('/auth/refresh'), {
           method: 'POST',
           credentials: 'include',
         })
