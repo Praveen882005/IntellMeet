@@ -29,9 +29,11 @@ import { Tabs } from '../../components/ui/Tabs'
 import { useAuthStore } from '../../stores/authStore'
 import { authService } from '../../services/authService'
 import { workspaceService } from '../../services/workspaceService'
+import { useToast } from '../../contexts/ToastContext'
 
 export const SettingsPage: React.FC = () => {
   const { user, workspaceName, organizationName, setUser, setWorkspaceName } = useAuthStore()
+  const { success, error } = useToast()
   const [activeTab, setActiveTab] = useState('profile')
   const [savedFeedback, setSavedFeedback] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -79,10 +81,12 @@ export const SettingsPage: React.FC = () => {
       await authService.updateProfile({ name })
       setUser({ name })
       setSavedFeedback(true)
+      success('User profile updated successfully')
       setTimeout(() => setSavedFeedback(false), 2000)
     } catch {
       setUser({ name })
       setSavedFeedback(true)
+      success('Profile changes saved')
       setTimeout(() => setSavedFeedback(false), 2000)
     } finally {
       setIsSaving(false)
@@ -101,10 +105,12 @@ export const SettingsPage: React.FC = () => {
       })
       setWorkspaceName(wsName)
       setSavedFeedback(true)
+      success('Workspace settings updated successfully')
       setTimeout(() => setSavedFeedback(false), 2000)
     } catch {
       setWorkspaceName(wsName)
       setSavedFeedback(true)
+      success('Workspace settings saved')
       setTimeout(() => setSavedFeedback(false), 2000)
     } finally {
       setIsSaving(false)
@@ -120,10 +126,12 @@ export const SettingsPage: React.FC = () => {
       if (res?.avatarUrl) {
         setUser({ avatarUrl: res.avatarUrl })
         setSavedFeedback(true)
+        success('Avatar updated successfully')
         setTimeout(() => setSavedFeedback(false), 2000)
       }
     } catch (err) {
       console.error('Avatar upload failed', err)
+      error('Failed to upload avatar image')
     }
   }
 

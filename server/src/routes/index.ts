@@ -13,6 +13,7 @@ import recordingRoutes from './recording.routes'
 import notificationRoutes from './notification.routes'
 import aiRoutes from './ai.routes'
 import healthRoutes from './health.routes'
+import calendarRoutes from './calendar.routes'
 import v1Routes from './v1.routes'
 
 const rootRouter = Router()
@@ -32,6 +33,7 @@ rootRouter.use('/recordings', recordingRoutes)
 rootRouter.use('/notifications', notificationRoutes)
 rootRouter.use('/ai', aiRoutes)
 rootRouter.use('/health', healthRoutes)
+rootRouter.use('/calendar', calendarRoutes)
 
 // Legacy / versioned namespace support
 rootRouter.use('/v1', v1Routes)

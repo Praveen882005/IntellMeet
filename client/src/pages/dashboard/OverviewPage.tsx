@@ -25,10 +25,13 @@ import { Badge } from '../../components/ui/Badge'
 import { Card } from '../../components/ui/Card'
 import { useAuthStore } from '../../stores/authStore'
 import { meetingService } from '../../services/meetingService'
+import { actionItemService, ActionItemDto } from '../../services/actionItemService'
+import { useToast } from '../../contexts/ToastContext'
 
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const { success, info, error } = useToast()
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
 
   // Fetch past and recorded meetings from server
@@ -37,8 +40,20 @@ export const OverviewPage: React.FC = () => {
     queryFn: () => meetingService.getMeetings(),
   })
 
-  // Simulated upcoming meetings schedule
-  const [upcomingMeetings, setUpcomingMeetings] = useState([
+  // Fetch real upcoming meetings from server
+  const { data: serverUpcoming = [] } = useQuery({
+    queryKey: ['upcoming-meetings'],
+    queryFn: () => meetingService.getUpcomingMeetings().catch(() => []),
+  })
+
+  // Fetch real action items from server
+  const { data: serverTasks = [], refetch: refetchTasks } = useQuery({
+    queryKey: ['action-items-overview'],
+    queryFn: () => actionItemService.getActionItems().catch(() => []),
+  })
+
+  // Fallback upcoming meetings schedule if server has none yet
+  const defaultUpcoming = [
     {
       id: 'm1',
       title: 'Sprint Planning & Backlog Grooming',
@@ -66,12 +81,12 @@ export const OverviewPage: React.FC = () => {
       host: 'Emily Watson',
       isHost: false,
     },
-  ])
+  ]
 
-  // Pending action items
-  const [tasks, setTasks] = useState([
+  // Fallback tasks if server has none yet
+  const defaultTasks = [
     {
-      id: 1,
+      id: 't1',
       title: 'Finalize WebRTC STUN/TURN fallback verification',
       meeting: 'Sprint Planning',
       dueDate: 'Today',
@@ -79,7 +94,7 @@ export const OverviewPage: React.FC = () => {
       completed: false,
     },
     {
-      id: 2,
+      id: 't2',
       title: 'Review SOC-2 audit logging requirements for transcript storage',
       meeting: 'Architecture Sync',
       dueDate: 'Tomorrow',
@@ -87,7 +102,7 @@ export const OverviewPage: React.FC = () => {
       completed: false,
     },
     {
-      id: 3,
+      id: 't3',
       title: 'Verify HTML5 Web Speech continuous subtitle auto-restart',
       meeting: 'Client Engine Review',
       dueDate: 'Nov 2',
@@ -95,19 +110,62 @@ export const OverviewPage: React.FC = () => {
       completed: true,
     },
     {
-      id: 4,
+      id: 't4',
       title: 'Distribute AI meeting minutes to executive leadership',
       meeting: 'Weekly Standup',
       dueDate: 'Nov 4',
       priority: 'low',
       completed: false,
     },
-  ])
+  ]
 
-  const toggleTask = (id: number) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
-    )
+  const upcomingMeetings = serverUpcoming.length > 0
+    ? serverUpcoming.map((m: any) => ({
+        id: m._id || m.id || m.roomId,
+        title: m.title || 'Scheduled Meeting',
+        roomId: m.roomId,
+        time: m.date ? `${m.date} at ${m.time || '10:00 AM'}` : 'Upcoming',
+        participants: m.attendees ? m.attendees.split(',').map((a: string) => a.trim()) : ['Team'],
+        host: m.hostName || 'Organizer',
+        isHost: m.hostId === user.id || m.hostName?.includes(user.name),
+      }))
+    : defaultUpcoming
+
+  const [localTasks, setLocalTasks] = useState(defaultTasks)
+
+  const displayTasks = serverTasks.length > 0
+    ? serverTasks.map((t) => ({
+        id: t._id || t.id || '',
+        title: t.title || t.text || 'Action Item',
+        meeting: t.meetingTitle || 'Sprint Session',
+        dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : 'Pending',
+        priority: t.priority || 'medium',
+        completed: t.status === 'completed',
+      }))
+    : localTasks
+
+  const toggleTask = async (id: string) => {
+    const task = displayTasks.find((t) => t.id === id)
+    if (!task) return
+
+    const newStatus = task.completed ? 'pending' : 'completed'
+
+    if (serverTasks.length > 0) {
+      try {
+        await actionItemService.updateActionItem(id, { status: newStatus as any })
+        refetchTasks()
+        info(`Action item marked as ${newStatus}`)
+      } catch {
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+        )
+      }
+    } else {
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+      )
+      info(`Action item status updated`)
+    }
   }
 
   const handleStartInstant = async () => {
@@ -115,9 +173,11 @@ export const OverviewPage: React.FC = () => {
       const res = await meetingService.createMeeting({
         title: `${user.name}'s Instant Conference`,
       })
+      success(`Instant meeting ready: ${res.roomId}`)
       navigate(`/room/${res.roomId}`)
     } catch {
       const fallbackRoom = `room-${Math.random().toString(36).substring(2, 8)}`
+      info(`Starting instant conference: ${fallbackRoom}`)
       navigate(`/room/${fallbackRoom}`)
     }
   }
@@ -126,6 +186,7 @@ export const OverviewPage: React.FC = () => {
     const link = `${window.location.origin}/room/${roomId}`
     navigator.clipboard.writeText(link)
     setCopiedRoomId(roomId)
+    success('Meeting link copied to clipboard!')
     setTimeout(() => setCopiedRoomId(null), 2000)
   }
 
@@ -358,7 +419,7 @@ export const OverviewPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-[#12B76A]" />
                 <h2 className="font-heading text-base font-bold text-[#101828]">
-                  Action Items ({tasks.filter((t) => !t.completed).length} Pending)
+                  Action Items ({displayTasks.filter((t) => !t.completed).length} Pending)
                 </h2>
               </div>
               <Link
@@ -370,10 +431,10 @@ export const OverviewPage: React.FC = () => {
             </div>
 
             <div className="space-y-2.5">
-              {tasks.map((task) => (
+              {displayTasks.map((task) => (
                 <div
                   key={task.id}
-                  onClick={() => toggleTask(task.id)}
+                  onClick={() => toggleTask(String(task.id))}
                   className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-3 select-none ${
                     task.completed
                       ? 'bg-[#F8FAFC] border-[#EAECF0] text-[#98A2B3] line-through'

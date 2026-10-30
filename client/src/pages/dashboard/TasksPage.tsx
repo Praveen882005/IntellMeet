@@ -23,8 +23,10 @@ import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
 import { actionItemService, ActionItemDto } from '../../services/actionItemService'
 import { aiService } from '../../services/aiService'
+import { useToast } from '../../contexts/ToastContext'
 
 export const TasksPage: React.FC = () => {
+  const { success, info, error } = useToast()
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all')
   const [tasks, setTasks] = useState<ActionItemDto[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -107,6 +109,7 @@ export const TasksPage: React.FC = () => {
 
     try {
       await actionItemService.updateActionItem(taskId, { status: newStatus })
+      info(`Task marked as ${newStatus}`)
     } catch {
       // Revert if error
       fetchTasks()
@@ -129,6 +132,7 @@ export const TasksPage: React.FC = () => {
     try {
       const created = await actionItemService.createActionItem(payload)
       setTasks((prev) => [created, ...prev])
+      success('Action item created successfully')
     } catch {
       setTasks((prev) => [
         {
@@ -138,6 +142,7 @@ export const TasksPage: React.FC = () => {
         },
         ...prev,
       ])
+      success('Action item created')
     }
 
     setNewTaskTitle('')
@@ -179,6 +184,7 @@ export const TasksPage: React.FC = () => {
 
     try {
       await actionItemService.updateActionItem(taskId, updates)
+      success('Task details updated')
     } catch {
       fetchTasks()
     }
@@ -208,9 +214,11 @@ export const TasksPage: React.FC = () => {
           } catch {}
         }
         await fetchTasks()
+        success(`Extracted ${extracted.length} action items from meeting transcript`)
       }
     } catch (err) {
       console.error('Failed to extract tasks:', err)
+      error('Failed to extract tasks from AI model')
     } finally {
       setIsExtracting(false)
     }

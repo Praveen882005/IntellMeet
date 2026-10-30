@@ -36,6 +36,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { aiService } from '../../services/aiService'
 import { meetingService } from '../../services/meetingService'
 import { ChatMessage } from '../../types'
+import { useToast } from '../../contexts/ToastContext'
 
 // Component for rendering a remote participant's real MediaStream
 const PeerVideoTile: React.FC<{
@@ -153,6 +154,7 @@ export const MeetingRoomPage: React.FC = () => {
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()
   const user = useAuthStore((s) => s.user)
+  const { success, info, error: toastError } = useToast()
 
   // Store state
   const {
@@ -357,6 +359,7 @@ export const MeetingRoomPage: React.FC = () => {
   const handleCopyInvite = () => {
     navigator.clipboard.writeText(window.location.href)
     setCopiedLink(true)
+    info('Meeting invitation link copied to clipboard')
     setTimeout(() => setCopiedLink(false), 2000)
   }
 
@@ -389,8 +392,10 @@ export const MeetingRoomPage: React.FC = () => {
       setKeyDecisions(decisions)
       setActionItems(items)
       setActiveSideTab('ai')
+      success('AI meeting minutes and key decisions generated')
     } catch (err: unknown) {
       console.error('AI summary error:', err)
+      toastError('Failed to generate AI meeting minutes')
     } finally {
       setIsGeneratingAi(false)
     }
@@ -401,6 +406,7 @@ export const MeetingRoomPage: React.FC = () => {
     if (isRecording) {
       const rec = await stopRecording(meetingSeconds)
       if (rec) {
+        success('Recording saved to cloud object storage')
         addMessage({
           id: `rec_${Date.now()}`,
           sender: 'IntellMeet Hub',
@@ -411,6 +417,7 @@ export const MeetingRoomPage: React.FC = () => {
       }
     } else {
       startRecording()
+      info('Cloud meeting recording started')
     }
   }
 
@@ -419,6 +426,7 @@ export const MeetingRoomPage: React.FC = () => {
     try {
       if (endForAll && isHost) {
         endMeetingForAll()
+        info('Meeting ended for all participants')
       } else {
         await meetingService.saveMeeting({
           roomId,
@@ -429,6 +437,7 @@ export const MeetingRoomPage: React.FC = () => {
           keyDecisions,
           actionItems,
         })
+        info('Left meeting room')
       }
     } catch (err: unknown) {
       console.warn('Error saving meeting report on leave:', err)

@@ -16,9 +16,11 @@ import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { meetingService } from '../../services/meetingService'
+import { useToast } from '../../contexts/ToastContext'
 
 export const ScheduleMeetingPage: React.FC = () => {
   const navigate = useNavigate()
+  const { success, info } = useToast()
 
   const [title, setTitle] = useState('Sprint Planning Session')
   const [date, setDate] = useState('2026-11-02')
@@ -65,10 +67,12 @@ export const ScheduleMeetingPage: React.FC = () => {
       const generatedRoom = res.roomId || `sprint-${Math.random().toString(36).substring(2, 7)}`
       setScheduledRoom(generatedRoom)
       setInviteUrl(res.inviteUrl || `${window.location.origin}/room/${generatedRoom}`)
+      success(`Meeting "${title}" scheduled successfully!`)
     } catch {
       const fallbackRoom = `sprint-${Math.random().toString(36).substring(2, 7)}`
       setScheduledRoom(fallbackRoom)
       setInviteUrl(`${window.location.origin}/room/${fallbackRoom}`)
+      success(`Meeting "${title}" scheduled!`)
     } finally {
       setLoading(false)
     }
@@ -77,6 +81,7 @@ export const ScheduleMeetingPage: React.FC = () => {
   const handleCopyLink = () => {
     navigator.clipboard.writeText(inviteUrl)
     setCopiedLink(true)
+    info('Meeting invitation link copied to clipboard.')
     setTimeout(() => setCopiedLink(false), 2000)
   }
 

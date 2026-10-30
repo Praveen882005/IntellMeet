@@ -81,6 +81,9 @@ export const scheduleMeeting = async (req: Request, res: Response): Promise<void
 
 export const updateMeeting = async (req: Request, res: Response): Promise<void> => {
   const id = String(req.params.id)
+  if (!req.body || Object.keys(req.body).length === 0) {
+    throw AppError.badRequest('Meeting update payload cannot be empty.')
+  }
   const updated = await MeetingService.updateMeeting(id, req.body)
   ApiResponse.success(res, updated, 'Meeting schedule updated.')
 }
@@ -119,6 +122,9 @@ export const validateMeetingAccess = async (req: Request, res: Response): Promis
   const userId = req.user?.userId
 
   const access = await MeetingService.validateMeetingAccess(roomId, userId)
+  if (!access || !access.meeting) {
+    throw AppError.notFound(`No meeting found with room ID: ${roomId}`)
+  }
 
   ApiResponse.success(res, access, 'Meeting room validated.')
 }

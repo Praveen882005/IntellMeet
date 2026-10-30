@@ -47,6 +47,34 @@ export const authenticate = (
   }
 }
 
+export const authenticateOptional = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  let token: string | undefined
+
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer ')
+  ) {
+    token = req.headers.authorization.split(' ')[1]
+  } else if (req.cookies?.accessToken) {
+    token = req.cookies.accessToken
+  }
+
+  if (token) {
+    try {
+      const decoded = verifyAccessToken(token)
+      req.user = decoded
+    } catch {
+      // Ignore token decode failure for optional auth
+    }
+  }
+
+  next()
+}
+
 export const requireRole = (...allowedRoles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

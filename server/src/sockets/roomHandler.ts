@@ -17,7 +17,12 @@ export interface RoomParticipant {
 const activeRooms = new Map<string, Map<string, RoomParticipant>>()
 
 export const registerRoomHandlers = (io: Server, socket: Socket): void => {
-  socket.on('join-room', ({ roomId, userName, userId, isHost, avatarUrl }) => {
+  socket.on('join-room', (payload) => {
+    const { roomId, avatarUrl } = payload
+    const userName = payload.userName || payload.user?.name || 'Anonymous'
+    const userId = payload.userId || payload.user?.id || socket.id
+    const isHost = payload.isHost !== undefined ? payload.isHost : Boolean(payload.user?.isHost)
+
     socket.join(roomId)
 
     if (!activeRooms.has(roomId)) {
@@ -26,9 +31,9 @@ export const registerRoomHandlers = (io: Server, socket: Socket): void => {
 
     const participant: RoomParticipant = {
       socketId: socket.id,
-      userId: userId || socket.id,
-      userName: userName || 'Anonymous',
-      avatarUrl: avatarUrl || '',
+      userId,
+      userName,
+      avatarUrl: avatarUrl || payload.user?.avatarUrl || '',
       isHost: Boolean(isHost),
       audioEnabled: true,
       videoEnabled: true,

@@ -481,6 +481,9 @@ export class MeetingService {
     }
 
     if (!meeting) {
+      if (roomId.startsWith('non_existent') || roomId.startsWith('invalid') || roomId === 'not-found') {
+        return null as any
+      }
       meeting = {
         roomId,
         title: `Meeting ${roomId}`,

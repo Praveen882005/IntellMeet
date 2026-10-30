@@ -27,13 +27,14 @@ export const extractTasks = async (req: Request, res: Response): Promise<void> =
 }
 
 export const askAssistant = async (req: Request, res: Response): Promise<void> => {
-  const { meetingId, question } = req.body
+  const { meetingId, roomName } = req.body
+  const question = (req.body.question || req.body.query || '').trim()
 
-  if (!question || !question.trim()) {
+  if (!question) {
     throw AppError.badRequest('Question text is required.')
   }
 
-  const answer = await AiService.askAssistant(meetingId || 'general', question.trim())
+  const answer = await AiService.askAssistant(meetingId || roomName || 'general', question)
   ApiResponse.success(res, answer, 'Assistant response generated.')
 }
 

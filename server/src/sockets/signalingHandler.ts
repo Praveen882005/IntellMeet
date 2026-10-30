@@ -18,27 +18,36 @@ export const registerSignalingHandlers = (io: Server, socket: Socket): void => {
   })
 
   // Explicit Offer handler
-  socket.on('offer', ({ targetId, offer }) => {
-    io.to(targetId).emit('offer', {
-      senderId: socket.id,
-      offer,
-    })
+  socket.on('offer', ({ targetId, targetSocketId, offer }) => {
+    const dest = targetId || targetSocketId
+    if (dest) {
+      io.to(dest).emit('offer', {
+        senderId: socket.id,
+        offer,
+      })
+    }
   })
 
   // Explicit Answer handler
-  socket.on('answer', ({ targetId, answer }) => {
-    io.to(targetId).emit('answer', {
-      senderId: socket.id,
-      answer,
-    })
+  socket.on('answer', ({ targetId, targetSocketId, answer }) => {
+    const dest = targetId || targetSocketId
+    if (dest) {
+      io.to(dest).emit('answer', {
+        senderId: socket.id,
+        answer,
+      })
+    }
   })
 
   // Explicit ICE Candidate exchange
-  socket.on('ice-candidate', ({ targetId, candidate }) => {
-    io.to(targetId).emit('ice-candidate', {
-      senderId: socket.id,
-      candidate,
-    })
+  socket.on('ice-candidate', ({ targetId, targetSocketId, candidate }) => {
+    const dest = targetId || targetSocketId
+    if (dest) {
+      io.to(dest).emit('ice-candidate', {
+        senderId: socket.id,
+        candidate,
+      })
+    }
   })
 
   // Media state changes (mute, camera off, screen share)
@@ -53,11 +62,13 @@ export const registerSignalingHandlers = (io: Server, socket: Socket): void => {
   })
 
   // Real-time Active Speaker audio level broadcast
-  socket.on('active-speaker', ({ roomId, speakerId, speakerName, volume }) => {
-    io.to(roomId).emit('active-speaker', {
-      speakerId: speakerId || socket.id,
-      speakerName,
-      volume,
+  socket.on('active-speaker', (data) => {
+    const speakerId = data.speakerId || data.userId || socket.id
+    io.to(data.roomId).emit('active-speaker', {
+      speakerId,
+      userId: speakerId,
+      speakerName: data.speakerName,
+      volume: data.volume,
     })
   })
 
@@ -78,11 +89,14 @@ export const registerSignalingHandlers = (io: Server, socket: Socket): void => {
   })
 
   // Host Action: End meeting for all participants
-  socket.on('end-meeting-all', ({ roomId }) => {
+  const handleEndMeetingAll = ({ roomId }: { roomId: string }) => {
     logger.info(`Host ended meeting for all participants in room: ${roomId}`)
     io.to(roomId).emit('meeting-ended', {
       roomId,
       message: 'The meeting was concluded by the host.',
     })
-  })
+  }
+
+  socket.on('end-meeting-all', handleEndMeetingAll)
+  socket.on('end-meeting-for-all', handleEndMeetingAll)
 }

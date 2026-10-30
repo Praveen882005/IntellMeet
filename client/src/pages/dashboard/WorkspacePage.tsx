@@ -33,9 +33,11 @@ import {
   WorkspaceDashboardStats,
   WorkspaceActivityItem,
 } from '../../services/workspaceService'
+import { useToast } from '../../contexts/ToastContext'
 
 export const WorkspacePage: React.FC = () => {
   const { workspaceName, setWorkspaceName } = useAuthStore()
+  const { success, info, error } = useToast()
 
   const [activeTab, setActiveTab] = useState<'members' | 'activity' | 'settings'>('members')
   const [searchQuery, setSearchQuery] = useState('')
@@ -93,11 +95,13 @@ export const WorkspacePage: React.FC = () => {
     setIsInviting(true)
     try {
       await workspaceService.inviteMember('ws_general', inviteEmail.trim(), inviteRole)
+      success(`Invitation sent to ${inviteEmail.trim()}`)
       setInviteEmail('')
       setInviteModalOpen(false)
       await fetchData()
     } catch (err) {
       console.error('Failed to invite member:', err)
+      error('Failed to send workspace invitation')
     } finally {
       setIsInviting(false)
     }
@@ -115,10 +119,12 @@ export const WorkspacePage: React.FC = () => {
 
     try {
       await workspaceService.updateMemberRole('ws_general', memberId, targetRole)
+      success(`Role updated to ${targetRole}`)
       setRoleModalOpen(false)
       await fetchData()
     } catch (err) {
       console.error('Failed to update role:', err)
+      error('Failed to update member role')
     }
   }
 
@@ -126,9 +132,11 @@ export const WorkspacePage: React.FC = () => {
     if (!confirm('Are you sure you want to remove this member from the workspace?')) return
     try {
       await workspaceService.removeMember('ws_general', memberId)
+      info('Member removed from workspace')
       await fetchData()
     } catch (err) {
       console.error('Failed to remove member:', err)
+      error('Failed to remove member')
     }
   }
 
@@ -144,9 +152,11 @@ export const WorkspacePage: React.FC = () => {
       })
       setWorkspaceName(wsName)
       setSettingsSaved(true)
+      success('Workspace settings updated successfully')
       setTimeout(() => setSettingsSaved(false), 2000)
     } catch (err) {
       console.error('Failed to save settings:', err)
+      error('Failed to update workspace settings')
     } finally {
       setIsSavingSettings(false)
     }
