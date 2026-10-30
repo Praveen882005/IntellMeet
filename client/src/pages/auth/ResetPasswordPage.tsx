@@ -1,12 +1,16 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Video, Lock, CheckCircle2, ArrowRight } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
+import { authService } from '../../services/authService'
 
 export const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const token = searchParams.get('token') || 'token_sample'
+
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,7 +22,7 @@ export const ResetPasswordPage: React.FC = () => {
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password)
   const isMatch = password.length > 0 && password === confirmPassword
 
-  const handleReset = (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!hasMinLength || !hasNumber || !hasSpecial) {
       setError('Password does not meet enterprise security requirements.')
@@ -32,10 +36,14 @@ export const ResetPasswordPage: React.FC = () => {
     setLoading(true)
     setError(null)
 
-    setTimeout(() => {
-      setLoading(false)
+    try {
+      await authService.resetPassword(token, password)
       setSuccess(true)
-    }, 600)
+    } catch (err: any) {
+      setError(err?.message || 'Password reset failed or token expired.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

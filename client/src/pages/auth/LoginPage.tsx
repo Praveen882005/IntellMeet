@@ -5,10 +5,11 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
 import { useAuthStore } from '../../stores/authStore'
+import { authService } from '../../services/authService'
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate()
-  const { setUserName } = useAuthStore()
+  const { setUser, setUserName } = useAuthStore()
 
   const [email, setEmail] = useState('architect@intellmeet.io')
   const [password, setPassword] = useState('password123')
@@ -16,21 +17,29 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
-    // Simulate login verification
-    setTimeout(() => {
-      setLoading(false)
-      if (!email.includes('@')) {
-        setError('Please enter a valid work email address')
-        return
-      }
-      setUserName(email.split('@')[0].replace('.', ' ').toUpperCase())
+    try {
+      const response = await authService.login({ email, password })
+      setUser({
+        id: response.user.id,
+        name: response.user.name,
+        email: response.user.email,
+        role: response.user.role,
+        avatarUrl: response.user.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
+        status: response.user.status || 'active',
+        organizationId: response.user.organizationId,
+        workspaceId: response.user.workspaceId,
+      })
       navigate('/app')
-    }, 600)
+    } catch (err: any) {
+      setError(err?.message || 'Invalid email or password.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

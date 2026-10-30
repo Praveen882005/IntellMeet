@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Video, Mail, CheckCircle2, ArrowRight } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { authService } from '../../services/authService'
 
 export const VerifyEmailPage: React.FC = () => {
   const navigate = useNavigate()
@@ -42,7 +43,7 @@ export const VerifyEmailPage: React.FC = () => {
     }
   }
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
     const code = otp.join('')
     if (code.length < 6) {
@@ -53,11 +54,14 @@ export const VerifyEmailPage: React.FC = () => {
     setLoading(true)
     setError(null)
 
-    setTimeout(() => {
-      setLoading(false)
-      // Navigate to organization onboarding wizard
+    try {
+      await authService.verifyEmail(email, code)
       navigate('/onboarding')
-    }, 600)
+    } catch (err: any) {
+      setError(err?.message || 'Invalid or expired verification code.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

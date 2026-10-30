@@ -3,12 +3,15 @@ import express, { Express } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import compression from 'compression'
+import cookieParser from 'cookie-parser'
 import { env } from './config/env'
 import { corsOptions } from './config/cors'
 import { db } from './config/db'
 import { logger } from './utils/logger'
 import { requestLogger } from './middleware/requestLogger.middleware'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.middleware'
+import { apiRateLimiter } from './middleware/rateLimiter.middleware'
+import { mongoSanitize } from './middleware/sanitize.middleware'
 import rootRouter from './routes'
 import { initSocketServer } from './sockets/socketHandler'
 
@@ -19,9 +22,11 @@ export const createApp = (): { app: Express; server: http.Server } => {
   // Security & Utility Middleware
   app.use(helmet({ crossOriginResourcePolicy: false }))
   app.use(cors(corsOptions))
+  app.use(cookieParser(env.COOKIE_SECRET))
   app.use(compression())
   app.use(express.json({ limit: '10mb' }))
   app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+  app.use(mongoSanitize)
   app.use(requestLogger)
 
   // Root welcome & status
@@ -38,8 +43,8 @@ export const createApp = (): { app: Express; server: http.Server } => {
     })
   })
 
-  // API Routes
-  app.use('/api', rootRouter)
+  // API Routes with rate limiting
+  app.use('/api', apiRateLimiter, rootRouter)
 
   // 404 & Centralized Error Handler
   app.use(notFoundHandler)

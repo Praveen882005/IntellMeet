@@ -1,13 +1,22 @@
 import { Schema, model, Document } from 'mongoose'
+import bcrypt from 'bcryptjs'
 
 export interface IUserDocument extends Document {
   name: string
   email: string
   passwordHash?: string
   avatarUrl?: string
-  role: 'super_admin' | 'admin' | 'member' | 'guest'
+  role: 'super_admin' | 'org_admin' | 'meeting_host' | 'member' | 'guest'
   organizationId?: Schema.Types.ObjectId
+  workspaceId?: Schema.Types.ObjectId
   isActive: boolean
+  isEmailVerified: boolean
+  verificationCode?: string
+  verificationExpires?: Date
+  resetPasswordToken?: string
+  resetPasswordExpires?: Date
+  refreshToken?: string
+  status: 'active' | 'away' | 'busy' | 'offline'
   preferences: {
     theme: 'light' | 'dark' | 'system'
     defaultMicEnabled: boolean
@@ -17,6 +26,7 @@ export interface IUserDocument extends Document {
   lastLoginAt?: Date
   createdAt: Date
   updatedAt: Date
+  comparePassword(candidate: string): Promise<boolean>
 }
 
 const UserSchema = new Schema<IUserDocument>(
@@ -47,7 +57,7 @@ const UserSchema = new Schema<IUserDocument>(
     },
     role: {
       type: String,
-      enum: ['super_admin', 'admin', 'member', 'guest'],
+      enum: ['super_admin', 'org_admin', 'meeting_host', 'member', 'guest'],
       default: 'member',
       index: true,
     },
@@ -56,15 +66,49 @@ const UserSchema = new Schema<IUserDocument>(
       ref: 'Organization',
       index: true,
     },
+    workspaceId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Workspace',
+      index: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationCode: {
+      type: String,
+      select: false,
+    },
+    verificationExpires: {
+      type: Date,
+      select: false,
+    },
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
+    },
+    refreshToken: {
+      type: String,
+      select: false,
+    },
+    status: {
+      type: String,
+      enum: ['active', 'away', 'busy', 'offline'],
+      default: 'active',
     },
     preferences: {
       theme: {
         type: String,
         enum: ['light', 'dark', 'system'],
-        default: 'dark',
+        default: 'light',
       },
       defaultMicEnabled: {
         type: Boolean,
@@ -89,5 +133,13 @@ const UserSchema = new Schema<IUserDocument>(
 )
 
 UserSchema.index({ organizationId: 1, role: 1 })
+
+// Instance method to check password with bcrypt
+UserSchema.methods.comparePassword = async function (
+  candidate: string
+): Promise<boolean> {
+  if (!this.passwordHash) return false
+  return bcrypt.compare(candidate, this.passwordHash)
+}
 
 export const User = model<IUserDocument>('User', UserSchema)

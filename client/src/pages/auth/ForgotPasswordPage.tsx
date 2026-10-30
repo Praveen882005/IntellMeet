@@ -4,20 +4,27 @@ import { Video, Mail, ArrowLeft, CheckCircle2, ArrowRight } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
+import { authService } from '../../services/authService'
 
 export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
-    setTimeout(() => {
-      setLoading(false)
+    try {
+      await authService.forgotPassword(email)
       setSubmitted(true)
-    }, 600)
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send reset email.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import {
   Settings,
   User,
@@ -8,6 +8,7 @@ import {
   CreditCard,
   Save,
   CheckCircle2,
+  Upload,
 } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
@@ -15,13 +16,15 @@ import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import { Tabs } from '../../components/ui/Tabs'
 import { useAuthStore } from '../../stores/authStore'
+import { authService } from '../../services/authService'
 
 export const SettingsPage: React.FC = () => {
-  const { user, workspaceName, organizationName, setUserName } = useAuthStore()
+  const { user, workspaceName, organizationName, setUser } = useAuthStore()
   const [activeTab, setActiveTab] = useState('profile')
   const [name, setName] = useState(user.name)
   const [email, setEmail] = useState(user.email)
   const [savedFeedback, setSavedFeedback] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Media preferences
   const [defaultMic, setDefaultMic] = useState(true)
@@ -32,11 +35,34 @@ export const SettingsPage: React.FC = () => {
   const [openAiKey, setOpenAiKey] = useState('')
   const [retentionDays, setRetentionDays] = useState('90')
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
-    setUserName(name)
-    setSavedFeedback(true)
-    setTimeout(() => setSavedFeedback(false), 2000)
+    try {
+      await authService.updateProfile({ name })
+      setUser({ name })
+      setSavedFeedback(true)
+      setTimeout(() => setSavedFeedback(false), 2000)
+    } catch {
+      setUser({ name })
+      setSavedFeedback(true)
+      setTimeout(() => setSavedFeedback(false), 2000)
+    }
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const res = await authService.uploadAvatar(file)
+      if (res?.avatarUrl) {
+        setUser({ avatarUrl: res.avatarUrl })
+        setSavedFeedback(true)
+        setTimeout(() => setSavedFeedback(false), 2000)
+      }
+    } catch (err) {
+      console.error('Avatar upload failed', err)
+    }
   }
 
   return (
@@ -81,11 +107,22 @@ export const SettingsPage: React.FC = () => {
               className="w-16 h-16 rounded-xl object-cover ring-2 ring-[#EAECF0]"
             />
             <div>
-              <Button variant="secondary" size="xs">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+              />
+              <Button
+                variant="secondary"
+                size="xs"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 Change Avatar
               </Button>
               <div className="text-[11px] text-[#667085] mt-1">
-                JPG, GIF or PNG. Max size 2MB.
+                JPG, GIF or PNG. Max size 5MB.
               </div>
             </div>
           </div>

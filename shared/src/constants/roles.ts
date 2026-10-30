@@ -1,6 +1,7 @@
 export const USER_ROLES = {
   SUPER_ADMIN: 'super_admin',
-  ADMIN: 'admin',
+  ORG_ADMIN: 'org_admin',
+  MEETING_HOST: 'meeting_host',
   MEMBER: 'member',
   GUEST: 'guest',
 } as const

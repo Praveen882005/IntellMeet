@@ -5,10 +5,11 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
 import { useAuthStore } from '../../stores/authStore'
+import { authService } from '../../services/authService'
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate()
-  const { setUserName } = useAuthStore()
+  const { setUser } = useAuthStore()
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -24,7 +25,7 @@ export const RegisterPage: React.FC = () => {
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password)
   const isPasswordValid = hasMinLength && hasNumber && hasSpecial
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!agreed) {
       setError('Please agree to the Terms of Service to continue.')
@@ -38,12 +39,28 @@ export const RegisterPage: React.FC = () => {
     setLoading(true)
     setError(null)
 
-    setTimeout(() => {
-      setLoading(false)
-      setUserName(name || 'Lead Architect')
-      // Navigate to email verification step
+    try {
+      const response = await authService.register({
+        name,
+        email,
+        password,
+        organizationName: company,
+        role: 'org_admin',
+      })
+      setUser({
+        id: response.user.id,
+        name: response.user.name,
+        email: response.user.email,
+        role: response.user.role,
+        avatarUrl: response.user.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
+        status: 'active',
+      })
       navigate(`/verify-email?email=${encodeURIComponent(email)}`)
-    }, 700)
+    } catch (err: any) {
+      setError(err?.message || 'Registration failed. Please check information.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

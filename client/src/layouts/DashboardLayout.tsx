@@ -31,12 +31,17 @@ import { useSocket } from '../hooks/useSocket'
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, workspaceName, organizationName } = useAuthStore()
+  const { user, workspaceName, organizationName, logout } = useAuthStore()
   const { isConnected } = useSocket()
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [joinModalOpen, setJoinModalOpen] = useState(false)
   const [joinRoomCode, setJoinRoomCode] = useState('')
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login')
+  }
 
   const navItems = [
     { label: 'Overview', icon: LayoutDashboard, path: '/app' },
@@ -145,9 +150,14 @@ export const DashboardLayout: React.FC = () => {
                 <div className="text-[10px] text-[#98A2B3] truncate">{user.email}</div>
               </div>
             </div>
-            <Link to="/login" title="Sign out" className="text-[#98A2B3] hover:text-white p-1">
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sign out"
+              className="text-[#98A2B3] hover:text-white p-1 transition-colors"
+            >
               <LogOut className="w-4 h-4" />
-            </Link>
+            </button>
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-[#98A2B3] pt-1">

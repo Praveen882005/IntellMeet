@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
 import { useAuthStore } from '../../stores/authStore'
+import { apiRequest } from '../../services/apiClient'
 
 export const OnboardingPage: React.FC = () => {
   const navigate = useNavigate()
@@ -32,7 +33,20 @@ export const OnboardingPage: React.FC = () => {
     setInvites(invites.filter((_, i) => i !== idx))
   }
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    try {
+      const slug = orgName.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000)
+      await apiRequest('/organizations', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: orgName,
+          slug,
+          tier: 'enterprise',
+        }),
+      })
+    } catch {
+      // Continue to dashboard
+    }
     navigate('/app')
   }
 

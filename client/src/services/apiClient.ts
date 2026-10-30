@@ -12,21 +12,79 @@ export class ApiError extends Error {
   }
 }
 
+let isRefreshing = false
+let refreshSubscribers: ((token: string) => void)[] = []
+
+function subscribeTokenRefresh(cb: (token: string) => void) {
+  refreshSubscribers.push(cb)
+}
+
+function onRefreshed(token: string) {
+  refreshSubscribers.forEach((cb) => cb(token))
+  refreshSubscribers = []
+}
+
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
+  // Normalize endpoint URL: support both relative "/auth/login" or full path
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const base = endpoint.startsWith('/api') ? '' : API_BASE_URL
+  const url = `${base}${normalizedEndpoint}`
 
   const headers = new Headers(options.headers || {})
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
+  // Attach Access Token if available
+  const token = localStorage.getItem('access_token')
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: 'include', // allow HTTP-only cookies to be sent
   })
+
+  // Handle Token Refresh on 401 Unauthorized (unless it's already an auth route)
+  if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+    if (!isRefreshing) {
+      isRefreshing = true
+      try {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        })
+        const refreshData = await refreshRes.json()
+        if (refreshRes.ok && refreshData.data?.accessToken) {
+          const newToken = refreshData.data.accessToken
+          localStorage.setItem('access_token', newToken)
+          isRefreshing = false
+          onRefreshed(newToken)
+
+          // Retry original request with new token
+          headers.set('Authorization', `Bearer ${newToken}`)
+          return apiRequest<T>(endpoint, { ...options, headers })
+        }
+      } catch {
+        // Refresh failed, proceed to logout or error
+      } finally {
+        isRefreshing = false
+      }
+    } else {
+      // Queue requests until refresh completes
+      return new Promise<T>((resolve, reject) => {
+        subscribeTokenRefresh((newToken) => {
+          headers.set('Authorization', `Bearer ${newToken}`)
+          apiRequest<T>(endpoint, { ...options, headers }).then(resolve).catch(reject)
+        })
+      })
+    }
+  }
 
   let payload: any
   try {
@@ -44,5 +102,5 @@ export async function apiRequest<T>(
     )
   }
 
-  return payload.data as T
+  return (payload.data !== undefined ? payload.data : payload) as T
 }
