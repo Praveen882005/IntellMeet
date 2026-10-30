@@ -169,6 +169,12 @@ export const MyMeetingsPage: React.FC = () => {
                   {copiedId === meeting.roomId ? 'Copied' : 'Invite'}
                 </Button>
 
+                <Link to={`/app/insights?meetingId=${meeting.roomId}`}>
+                  <Button variant="secondary" size="sm" icon={<Calendar className="w-3.5 h-3.5" />}>
+                    AI Insights
+                  </Button>
+                </Link>
+
                 <Link to={`/room/${meeting.roomId}`}>
                   <Button variant="primary" size="sm" icon={<Video className="w-3.5 h-3.5" />}>
                     Join Room

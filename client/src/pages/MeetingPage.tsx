@@ -177,9 +177,23 @@ export const MeetingPage: React.FC = () => {
         messages: messages,
       })
 
-      setAiSummary(result.executiveSummary || result.summary)
-      setKeyDecisions(result.keyDecisions || [])
-      setActionItems(result.actionItems || [])
+      const summaryObj = result.summary
+      const summaryText =
+        typeof summaryObj === 'string'
+          ? summaryObj
+          : summaryObj?.meetingOverview || ''
+      const decisions = summaryObj?.importantDecisions || []
+      const items = (result.actionItems || []).map((item, idx) => ({
+        id: item.id || `ai_item_${idx}_${Date.now()}`,
+        text: item.title || (item as any).text || '',
+        assignee: item.assignee || 'Unassigned',
+        completed: item.status === 'completed',
+        priority: item.priority || 'medium',
+      }))
+
+      setAiSummary(summaryText)
+      setKeyDecisions(decisions)
+      setActionItems(items)
       setActiveSideTab('ai')
     } catch (err: unknown) {
       console.error('AI summary error:', err)
