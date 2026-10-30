@@ -20,6 +20,7 @@ interface AuthState {
   isLoading: boolean
   workspaceName: string
   organizationName: string
+  setWorkspaceName: (name: string) => void
   setUserName: (name: string) => void
   setUser: (user: Partial<UserProfile>) => void
   setAccessToken: (token: string | null) => void
@@ -41,6 +42,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: false,
   workspaceName: 'Engineering Sprint Workspace',
   organizationName: 'Enterprise Cloud Inc.',
+
+  setWorkspaceName: (workspaceName: string) => set({ workspaceName }),
 
   setUserName: (name: string) =>
     set((state) => ({ user: { ...state.user, name } })),

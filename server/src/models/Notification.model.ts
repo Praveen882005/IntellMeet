@@ -5,8 +5,11 @@ export interface INotificationDocument extends Document {
   senderId?: Schema.Types.ObjectId
   type:
     | 'meeting_invite'
-    | 'meeting_summary_ready'
+    | 'meeting_reminder'
+    | 'meeting_update'
     | 'action_item_assigned'
+    | 'deadline_approaching'
+    | 'meeting_summary_ready'
     | 'recording_ready'
     | 'system_alert'
   title: string
@@ -35,8 +38,11 @@ const NotificationSchema = new Schema<INotificationDocument>(
       type: String,
       enum: [
         'meeting_invite',
-        'meeting_summary_ready',
+        'meeting_reminder',
+        'meeting_update',
         'action_item_assigned',
+        'deadline_approaching',
+        'meeting_summary_ready',
         'recording_ready',
         'system_alert',
       ],

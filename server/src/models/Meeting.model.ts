@@ -2,6 +2,7 @@ import { Schema, model, Document } from 'mongoose'
 
 export interface IMeetingDocument extends Document {
   title: string
+  description?: string
   roomId: string
   passCode?: string
   hostId?: Schema.Types.ObjectId
@@ -11,10 +12,16 @@ export interface IMeetingDocument extends Document {
   scheduledStartTime?: Date
   actualStartTime?: Date
   endTime?: Date
+  durationMinutes?: number
+  timezone?: string
+  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly'
+  participantInvitations?: string[]
   status: 'scheduled' | 'live' | 'completed' | 'cancelled'
   type: 'instant' | 'scheduled' | 'recurring'
   participantsCount: number
   participantsList: string[]
+  recordingUrl?: string
+  transcriptSnippet?: string
   settings: {
     isMutedOnEntry: boolean
     isCamOffOnEntry: boolean
@@ -41,6 +48,12 @@ const MeetingSchema = new Schema<IMeetingDocument>(
       default: 'IntellMeet Collaborative Session',
       trim: true,
       maxlength: [150, 'Title cannot exceed 150 characters'],
+    },
+    description: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: [500, 'Description cannot exceed 500 characters'],
     },
     roomId: {
       type: String,
@@ -75,6 +88,7 @@ const MeetingSchema = new Schema<IMeetingDocument>(
     },
     scheduledStartTime: {
       type: Date,
+      index: true,
     },
     actualStartTime: {
       type: Date,
@@ -82,6 +96,31 @@ const MeetingSchema = new Schema<IMeetingDocument>(
     },
     endTime: {
       type: Date,
+    },
+    durationMinutes: {
+      type: Number,
+      default: 45,
+    },
+    timezone: {
+      type: String,
+      default: 'UTC',
+    },
+    recurrence: {
+      type: String,
+      enum: ['none', 'daily', 'weekly', 'monthly'],
+      default: 'none',
+    },
+    participantInvitations: {
+      type: [String],
+      default: [],
+    },
+    recordingUrl: {
+      type: String,
+      default: '',
+    },
+    transcriptSnippet: {
+      type: String,
+      default: '',
     },
     status: {
       type: String,

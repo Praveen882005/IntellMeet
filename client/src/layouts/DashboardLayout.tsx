@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Calendar,
+  CalendarDays,
   CalendarPlus,
   History,
   Layers,
@@ -19,6 +20,9 @@ import {
   Building2,
   Menu,
   X,
+  Check,
+  Clock,
+  CheckCircle2,
   ExternalLink,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
@@ -27,26 +31,87 @@ import { Modal } from '../components/ui/Modal'
 import { Input } from '../components/ui/Input'
 import { useAuthStore } from '../stores/authStore'
 import { useSocket } from '../hooks/useSocket'
+import { notificationService, NotificationDto } from '../services/notificationService'
 
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, workspaceName, organizationName, logout } = useAuthStore()
-  const { isConnected } = useSocket()
+  const { socket, isConnected } = useSocket()
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [joinModalOpen, setJoinModalOpen] = useState(false)
   const [joinRoomCode, setJoinRoomCode] = useState('')
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifications, setNotifications] = useState<NotificationDto[]>([])
+  const notifDropdownRef = useRef<HTMLDivElement>(null)
 
   const handleLogout = async () => {
     await logout()
     navigate('/login')
   }
 
+  // Load notifications and attach real-time Socket listener
+  useEffect(() => {
+    notificationService
+      .getNotifications()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setNotifications(data)
+        }
+      })
+      .catch(() => {})
+
+    if (socket) {
+      const handleNewNotification = (notif: NotificationDto) => {
+        setNotifications((prev) => [notif, ...prev])
+      }
+      socket.on('notification', handleNewNotification)
+      return () => {
+        socket.off('notification', handleNewNotification)
+      }
+    }
+  }, [socket])
+
+  // Close notifications on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (notifDropdownRef.current && !notifDropdownRef.current.contains(e.target as Node)) {
+        setNotifOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [])
+
+  const unreadCount = notifications.filter((n) => !n.read).length
+
+  const handleMarkRead = async (id: string, link?: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n._id === id || n.id === id ? { ...n, read: true } : n))
+    )
+    try {
+      await notificationService.markAsRead(id)
+    } catch {}
+
+    if (link) {
+      setNotifOpen(false)
+      navigate(link)
+    }
+  }
+
+  const handleMarkAllRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    try {
+      await notificationService.markAllAsRead()
+    } catch {}
+  }
+
   const navItems = [
     { label: 'Overview', icon: LayoutDashboard, path: '/app' },
     { label: 'My Meetings', icon: Calendar, path: '/app/meetings' },
     { label: 'Schedule Meeting', icon: CalendarPlus, path: '/app/schedule' },
+    { label: 'Calendar', icon: CalendarDays, path: '/app/calendar' },
     { label: 'Meeting History', icon: History, path: '/app/history' },
     { label: 'Team Workspace', icon: Layers, path: '/app/workspace' },
     { label: 'AI Insights', icon: Sparkles, path: '/app/insights', badge: 'AI' },
@@ -219,10 +284,88 @@ export const DashboardLayout: React.FC = () => {
 
             <div className="h-6 w-px bg-[#EAECF0] mx-1" />
 
-            <button className="p-2 rounded-lg text-[#667085] hover:bg-[#F2F4F7] relative">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#2563EB]" />
-            </button>
+            {/* Notifications Menu */}
+            <div className="relative" ref={notifDropdownRef}>
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="p-2 rounded-lg text-[#667085] hover:bg-[#F2F4F7] relative transition-colors"
+                title="Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#2563EB] ring-2 ring-white" />
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white shadow-xl border border-[#EAECF0] z-50 overflow-hidden animate-fade-in">
+                  <div className="p-3.5 border-b border-[#EAECF0] flex items-center justify-between bg-[#F8FAFC]">
+                    <div className="flex items-center gap-2">
+                      <span className="font-heading font-semibold text-xs text-[#101828]">
+                        Notifications
+                      </span>
+                      {unreadCount > 0 && (
+                        <span className="bg-[#EFF8FF] text-[#175CD3] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#B2DDFF]">
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-[11px] text-[#2563EB] hover:underline font-medium"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto divide-y divide-[#EAECF0]">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[#667085]">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.map((notif) => (
+                        <div
+                          key={notif._id || notif.id}
+                          onClick={() => handleMarkRead(notif._id || notif.id || '', notif.link)}
+                          className={`p-3.5 hover:bg-[#F8FAFC] transition-colors cursor-pointer flex items-start gap-3 text-xs ${
+                            !notif.read ? 'bg-[#F5FAFF]' : 'bg-white'
+                          }`}
+                        >
+                          <div className="mt-0.5 w-7 h-7 rounded-lg bg-[#EFF8FF] text-[#2563EB] flex items-center justify-center shrink-0">
+                            {notif.type === 'meeting_invite' || notif.type === 'meeting_reminder' ? (
+                              <Calendar className="w-3.5 h-3.5" />
+                            ) : notif.type === 'meeting_summary_ready' ? (
+                              <Sparkles className="w-3.5 h-3.5" />
+                            ) : notif.type === 'action_item_assigned' ? (
+                              <CheckSquare className="w-3.5 h-3.5" />
+                            ) : (
+                              <Bell className="w-3.5 h-3.5" />
+                            )}
+                          </div>
+
+                          <div className="space-y-1 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-[#101828]">
+                                {notif.title}
+                              </span>
+                              {!notif.read && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                              )}
+                            </div>
+                            <p className="text-[11px] text-[#475467] leading-relaxed">
+                              {notif.message}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

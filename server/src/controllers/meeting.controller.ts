@@ -54,6 +54,66 @@ export const createMeeting = async (req: Request, res: Response): Promise<void> 
   )
 }
 
+export const scheduleMeeting = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId || 'usr_host'
+  const userName = req.user?.email.split('@')[0] || req.body.hostName || 'Lead Host'
+
+  const scheduled = await MeetingService.scheduleMeeting({
+    ...req.body,
+    hostId: userId,
+    hostName: userName,
+    workspaceId: req.body.workspaceId || req.user?.workspaceId,
+  })
+
+  const protocol = req.protocol || 'http'
+  const host = req.get('host') || 'localhost:5173'
+  const inviteUrl = `${protocol}://${host}/room/${scheduled.roomId}`
+
+  ApiResponse.created(
+    res,
+    {
+      ...scheduled,
+      inviteUrl,
+    },
+    'Meeting scheduled successfully.'
+  )
+}
+
+export const updateMeeting = async (req: Request, res: Response): Promise<void> => {
+  const id = String(req.params.id)
+  const updated = await MeetingService.updateMeeting(id, req.body)
+  ApiResponse.success(res, updated, 'Meeting schedule updated.')
+}
+
+export const cancelMeeting = async (req: Request, res: Response): Promise<void> => {
+  const id = String(req.params.id)
+  const cancelled = await MeetingService.cancelMeeting(id)
+  ApiResponse.success(res, cancelled, 'Meeting cancelled successfully.')
+}
+
+export const getUpcomingMeetings = async (req: Request, res: Response): Promise<void> => {
+  const workspaceId = req.query.workspaceId as string | undefined
+  const upcoming = await MeetingService.getUpcomingMeetings(workspaceId)
+  ApiResponse.success(res, upcoming, 'Upcoming meetings retrieved.')
+}
+
+export const getMeetingHistory = async (req: Request, res: Response): Promise<void> => {
+  const { search, status, startDate, endDate, sort, page, limit, workspaceId } = req.query
+
+  const history = await MeetingService.getMeetingHistory({
+    search: search ? String(search) : undefined,
+    status: status ? String(status) : undefined,
+    startDate: startDate ? String(startDate) : undefined,
+    endDate: endDate ? String(endDate) : undefined,
+    sort: sort ? String(sort) : undefined,
+    page: page ? Number(page) : undefined,
+    limit: limit ? Number(limit) : undefined,
+    workspaceId: workspaceId ? String(workspaceId) : undefined,
+  })
+
+  ApiResponse.success(res, history, 'Meeting history archive retrieved.')
+}
+
 export const validateMeetingAccess = async (req: Request, res: Response): Promise<void> => {
   const roomId = String(req.params.roomId)
   const userId = req.user?.userId

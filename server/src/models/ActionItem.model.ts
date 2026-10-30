@@ -2,6 +2,7 @@ import { Schema, model, Document } from 'mongoose'
 
 export interface IActionItemDocument extends Document {
   meetingId: Schema.Types.ObjectId
+  meetingTitle?: string
   summaryId?: Schema.Types.ObjectId
   text: string
   assigneeName: string
@@ -9,6 +10,8 @@ export interface IActionItemDocument extends Document {
   dueDate?: Date
   priority: 'low' | 'medium' | 'high'
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  aiGenerated?: boolean
+  relatedDiscussion?: string
   completedAt?: Date
   completedBy?: Schema.Types.ObjectId
   createdAt: Date
@@ -22,6 +25,11 @@ const ActionItemSchema = new Schema<IActionItemDocument>(
       ref: 'Meeting',
       required: [true, 'Meeting ID is required'],
       index: true,
+    },
+    meetingTitle: {
+      type: String,
+      default: '',
+      trim: true,
     },
     summaryId: {
       type: Schema.Types.ObjectId,
@@ -56,6 +64,14 @@ const ActionItemSchema = new Schema<IActionItemDocument>(
       enum: ['pending', 'in_progress', 'completed', 'cancelled'],
       default: 'pending',
       index: true,
+    },
+    aiGenerated: {
+      type: Boolean,
+      default: false,
+    },
+    relatedDiscussion: {
+      type: String,
+      default: '',
     },
     completedAt: {
       type: Date,

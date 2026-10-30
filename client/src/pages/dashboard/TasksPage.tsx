@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   CheckSquare,
   Plus,
@@ -363,6 +364,19 @@ export const TasksPage: React.FC = () => {
                       <div className="text-[11px] text-[#475467] bg-[#F8FAFC] px-2.5 py-1 rounded border border-[#EAECF0] flex items-center gap-1.5">
                         <Quote className="w-3 h-3 text-[#2563EB] shrink-0" />
                         <span className="truncate">{task.relatedDiscussion}</span>
+                      </div>
+                    )}
+
+                    {task.meetingId && (
+                      <div className="pt-0.5">
+                        <Link
+                          to={`/app/insights?meetingId=${task.meetingId}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#2563EB] bg-[#EFF8FF] px-2 py-0.5 rounded border border-[#B2DDFF] hover:bg-[#D1E9FF] transition-colors"
+                        >
+                          <Sparkles className="w-3 h-3 text-[#2563EB]" />
+                          Linked: {task.meetingTitle || `Meeting ${task.meetingId}`}
+                        </Link>
                       </div>
                     )}
                   </div>

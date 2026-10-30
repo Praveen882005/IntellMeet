@@ -2,6 +2,9 @@ import { Router } from 'express'
 import {
   createWorkspace,
   getWorkspaces,
+  getWorkspaceDashboard,
+  updateWorkspaceSettings,
+  getWorkspaceActivity,
   getWorkspaceMembers,
   inviteMember,
   updateMemberRole,
@@ -16,6 +19,9 @@ router.use(authenticate)
 
 router.get('/', asyncHandler(getWorkspaces))
 router.post('/', requireRole('super_admin', 'org_admin'), asyncHandler(createWorkspace))
+router.get('/:id/dashboard', asyncHandler(getWorkspaceDashboard))
+router.get('/:id/activity', asyncHandler(getWorkspaceActivity))
+router.patch('/:id', asyncHandler(updateWorkspaceSettings))
 router.get('/:id/members', asyncHandler(getWorkspaceMembers))
 router.post('/:id/members', requireRole('super_admin', 'org_admin'), asyncHandler(inviteMember))
 router.patch('/:id/members/:memberId', requireRole('super_admin', 'org_admin'), asyncHandler(updateMemberRole))

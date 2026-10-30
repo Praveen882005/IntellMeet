@@ -1,33 +1,27 @@
 import { Request, Response } from 'express'
-import { Notification } from '../models/Notification.model'
+import { NotificationService } from '../services/notification.service'
 import { ApiResponse } from '../utils/apiResponse'
-import { db } from '../config/db'
 
 export const getNotifications = async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user?.userId
+  const userId = req.user?.userId || 'usr_sarah'
+  const list = await NotificationService.getNotificationsForUser(userId)
+  ApiResponse.success(res, list, 'Notifications retrieved.')
+}
 
-  if (db.isConnected() && userId) {
-    const list = await Notification.find({ recipientId: userId }).sort({ createdAt: -1 }).limit(20).lean()
-    ApiResponse.success(res, list, 'Notifications retrieved.')
-    return
-  }
-
-  ApiResponse.success(
-    res,
-    [
-      { id: 'notif_1', title: 'Meeting Summary Ready', message: 'AI minutes generated for Sprint Q4.', read: false },
-      { id: 'notif_2', title: 'Task Assigned', message: 'You were assigned: Finalize WebRTC signaling.', read: true },
-    ],
-    'Notifications retrieved.'
-  )
+export const createNotification = async (req: Request, res: Response): Promise<void> => {
+  const data = req.body
+  const notif = await NotificationService.createNotification(data)
+  ApiResponse.created(res, notif, 'Notification created and dispatched.')
 }
 
 export const markNotificationRead = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params
+  const id = String(req.params.id)
+  const updated = await NotificationService.markRead(id)
+  ApiResponse.success(res, updated, 'Notification marked as read.')
+}
 
-  if (db.isConnected()) {
-    await Notification.findByIdAndUpdate(id, { read: true, readAt: new Date() })
-  }
-
-  ApiResponse.success(res, { id, read: true }, 'Notification marked as read.')
+export const markAllNotificationsRead = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId || 'usr_sarah'
+  await NotificationService.markAllRead(userId)
+  ApiResponse.success(res, { success: true }, 'All notifications marked as read.')
 }

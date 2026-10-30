@@ -34,23 +34,50 @@ export const ScheduleMeetingPage: React.FC = () => {
   const [enableTranscription, setEnableTranscription] = useState(true)
   const [enableAiSummary, setEnableAiSummary] = useState(true)
 
+  const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
   const [scheduledRoom, setScheduledRoom] = useState<string | null>(null)
+  const [inviteUrl, setInviteUrl] = useState('')
+  const [copiedLink, setCopiedLink] = useState(false)
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const res = await meetingService.createMeeting({ title })
+      const res = await meetingService.scheduleMeeting({
+        title,
+        description,
+        date,
+        time,
+        timezone,
+        durationMinutes: parseInt(duration, 10),
+        recurrence: recurrence as any,
+        attendees,
+        settings: {
+          isMutedOnEntry: muteOnEntry,
+          isCamOffOnEntry: camOffOnEntry,
+          enableTranscription,
+          enableAiSummaries: enableAiSummary,
+        },
+      })
+
       const generatedRoom = res.roomId || `sprint-${Math.random().toString(36).substring(2, 7)}`
       setScheduledRoom(generatedRoom)
+      setInviteUrl(res.inviteUrl || `${window.location.origin}/room/${generatedRoom}`)
     } catch {
       const fallbackRoom = `sprint-${Math.random().toString(36).substring(2, 7)}`
       setScheduledRoom(fallbackRoom)
+      setInviteUrl(`${window.location.origin}/room/${fallbackRoom}`)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(inviteUrl)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
   }
 
   return (
@@ -83,12 +110,20 @@ export const ScheduleMeetingPage: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-[#667085]">Scheduled Time:</span>
-              <span className="font-medium text-[#101828]">{date} at {time}</span>
+              <span className="font-medium text-[#101828]">{date} at {time} ({timezone})</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#667085]">AI Minutes:</span>
               <Badge variant="success" size="sm">Enabled</Badge>
             </div>
+            {inviteUrl && (
+              <div className="pt-2 border-t border-[#EAECF0] flex items-center justify-between">
+                <span className="text-[#667085] truncate max-w-[240px] font-mono text-[11px]">{inviteUrl}</span>
+                <Button variant="outline" size="sm" onClick={handleCopyLink}>
+                  {copiedLink ? 'Copied' : 'Copy Link'}
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-center gap-3 pt-2">

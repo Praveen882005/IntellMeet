@@ -11,6 +11,7 @@ import { DashboardLayout } from '../layouts/DashboardLayout'
 import { OverviewPage } from '../pages/dashboard/OverviewPage'
 import { MyMeetingsPage } from '../pages/dashboard/MyMeetingsPage'
 import { ScheduleMeetingPage } from '../pages/dashboard/ScheduleMeetingPage'
+import { CalendarPage } from '../pages/dashboard/CalendarPage'
 import { HistoryPage } from '../pages/HistoryPage'
 import { WorkspacePage } from '../pages/dashboard/WorkspacePage'
 import { AiInsightsPage } from '../pages/dashboard/AiInsightsPage'
@@ -42,6 +43,7 @@ export const AppRoutes: React.FC = () => {
         <Route index element={<OverviewPage />} />
         <Route path="meetings" element={<MyMeetingsPage />} />
         <Route path="schedule" element={<ScheduleMeetingPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="insights" element={<AiInsightsPage />} />
