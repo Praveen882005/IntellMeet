@@ -55,7 +55,7 @@ export const LandingPage: React.FC = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#101828] font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#101828] font-sans overflow-x-hidden">
       {/* 1. Public Navigation */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[#EAECF0] transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">

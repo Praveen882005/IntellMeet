@@ -63,4 +63,7 @@ const RecordingSchema = new Schema<IRecordingDocument>(
   }
 )
 
+RecordingSchema.index({ meetingId: 1, createdAt: -1 })
+RecordingSchema.index({ status: 1, createdAt: -1 })
+
 export const Recording = model<IRecordingDocument>('Recording', RecordingSchema)

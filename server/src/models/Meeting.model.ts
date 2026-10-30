@@ -172,5 +172,8 @@ const MeetingSchema = new Schema<IMeetingDocument>(
 
 MeetingSchema.index({ workspaceId: 1, status: 1, createdAt: -1 })
 MeetingSchema.index({ hostId: 1, createdAt: -1 })
+MeetingSchema.index({ status: 1, scheduledStartTime: 1 })
+MeetingSchema.index({ roomId: 1, status: 1 })
+MeetingSchema.index({ organizationId: 1, createdAt: -1 })
 
 export const Meeting = model<IMeetingDocument>('Meeting', MeetingSchema)
