@@ -4,7 +4,6 @@ import {
   Mic,
   MicOff,
   Video,
-  Video as VideoIcon,
   VideoOff,
   Clock,
   MonitorUp,
@@ -23,26 +22,131 @@ import {
   Shield,
   FileText,
   Radio,
-  Maximize2,
-  MoreVertical,
-  Volume2,
-  VolumeX,
-  Search,
-  Lock,
+  Settings,
   ChevronDown,
-  Circle,
 } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { useSocket } from '../../hooks/useSocket'
-import { useWebRTC } from '../../hooks/useWebRTC'
+import { useWebRTC, RemotePeer } from '../../hooks/useWebRTC'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
 import { useMeetingStore } from '../../stores/meetingStore'
 import { useAuthStore } from '../../stores/authStore'
 import { aiService } from '../../services/aiService'
 import { meetingService } from '../../services/meetingService'
 import { ChatMessage } from '../../types'
+
+// Component for rendering a remote participant's real MediaStream
+const PeerVideoTile: React.FC<{
+  peer: RemotePeer
+  isActiveSpeaker: boolean
+  onMute?: () => void
+  onRemove?: () => void
+  canModerate?: boolean
+}> = ({ peer, isActiveSpeaker, onMute, onRemove, canModerate }) => {
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    if (videoRef.current && peer.stream) {
+      videoRef.current.srcObject = peer.stream
+    }
+  }, [peer.stream])
+
+  return (
+    <div
+      className={`rounded-2xl bg-[#111827] relative overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 ${
+        isActiveSpeaker || peer.isSpeaking
+          ? 'border-2 border-[#12B76A] ring-4 ring-[#12B76A]/20'
+          : 'border border-white/10'
+      }`}
+    >
+      {peer.videoEnabled ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className="flex flex-col items-center gap-3 text-slate-400 p-4">
+          {peer.avatarUrl ? (
+            <img
+              src={peer.avatarUrl}
+              alt={peer.userName}
+              className="w-20 h-20 rounded-full object-cover ring-2 ring-white/10"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-white font-bold text-xl shadow-inner">
+              {peer.userName.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          <div className="text-xs font-medium text-slate-300">
+            {peer.userName} (Camera Off)
+          </div>
+        </div>
+      )}
+
+      {/* Speaking badge */}
+      {(isActiveSpeaker || peer.isSpeaking) && (
+        <div className="absolute top-3 left-3 bg-[#12B76A] text-black px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow">
+          <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
+          Speaking
+        </div>
+      )}
+
+      {/* Connection indicator */}
+      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded text-[10px] text-slate-300 flex items-center gap-1.5">
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            peer.connectionState === 'connected' ? 'bg-[#12B76A]' : 'bg-[#F79009]'
+          }`}
+        />
+        <span className="capitalize">{peer.connectionState || 'connected'}</span>
+      </div>
+
+      {/* Bottom overlay: Name & Mic indicator */}
+      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+        <div className="bg-black/80 backdrop-blur-xs px-2.5 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-2">
+          <span>{peer.userName}</span>
+          {peer.isHost && (
+            <span className="bg-[#2563EB]/40 text-[#60A5FA] border border-[#60A5FA]/40 text-[9px] px-1 py-0.2 rounded font-semibold">
+              Host
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {canModerate && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onMute}
+                title="Mute participant"
+                className="bg-black/80 hover:bg-white/20 p-1.5 rounded-lg text-slate-300 hover:text-white transition-colors"
+              >
+                <MicOff className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={onRemove}
+                title="Remove from meeting"
+                className="bg-black/80 hover:bg-rose-600/70 p-1.5 rounded-lg text-slate-300 hover:text-white transition-colors"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          <div className="bg-black/80 p-1.5 rounded-lg text-white">
+            {peer.audioEnabled ? (
+              <Mic className="w-3.5 h-3.5 text-[#12B76A]" />
+            ) : (
+              <MicOff className="w-3.5 h-3.5 text-[#F04438]" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export const MeetingRoomPage: React.FC = () => {
   const { roomId = 'sprint-room' } = useParams<{ roomId: string }>()
@@ -62,7 +166,6 @@ export const MeetingRoomPage: React.FC = () => {
     liveSubtitle,
     liveSubtitleSpeaker,
     actionItems,
-    participantsCount,
     setRoomId,
     toggleMic,
     toggleCam,
@@ -71,7 +174,6 @@ export const MeetingRoomPage: React.FC = () => {
     addMessage,
     setActionItems,
     toggleActionItem,
-    setParticipantsCount,
     resetMeetingState,
   } = useMeetingStore()
 
@@ -81,48 +183,95 @@ export const MeetingRoomPage: React.FC = () => {
   const [isGeneratingAi, setIsGeneratingAi] = useState(false)
   const [aiSummary, setAiSummary] = useState<string>('')
   const [keyDecisions, setKeyDecisions] = useState<string[]>([])
-  const [isRecording, setIsRecording] = useState(false)
   const [meetingSeconds, setMeetingSeconds] = useState(0)
   const [leaveModalOpen, setLeaveModalOpen] = useState(false)
-  const [activeSpeaker, setActiveSpeaker] = useState<string>(user.name)
+  const [deviceModalOpen, setDeviceModalOpen] = useState(false)
+  const [isHost, setIsHost] = useState(false)
   const [transcriptSearch, setTranscriptSearch] = useState('')
 
-  // Simulated peer participants in room
-  const [peers, setPeers] = useState([
-    {
-      id: 'peer_1',
-      name: 'David Miller',
-      role: 'Co-Host',
-      isMuted: false,
-      isCamOn: true,
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'peer_2',
-      name: 'Elena Rostova',
-      role: 'Participant',
-      isMuted: true,
-      isCamOn: false,
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
-    },
-  ])
+  const chatEndRef = useRef<HTMLDivElement | null>(null)
 
-  // WebRTC & Speech Recognition Hooks
+  // WebRTC Hook
   const {
     localStream,
     screenStream,
     localVideoRef,
     screenVideoRef,
+    peers,
     deviceError,
+    isRecording,
+    activeSpeakerId,
+    audioInputDevices,
+    videoInputDevices,
+    selectedAudioId,
+    selectedVideoId,
     initMedia,
     toggleScreenShare,
-  } = useWebRTC()
+    switchCamera,
+    switchMicrophone,
+    startRecording,
+    stopRecording,
+    muteParticipant,
+    removeParticipant,
+    endMeetingForAll,
+  } = useWebRTC({
+    roomId,
+    socket,
+    currentUser: {
+      id: user.id || 'usr_anonymous',
+      name: user.name || 'Anonymous',
+      avatarUrl: user.avatarUrl,
+    },
+    isHost,
+    onMeetingEnded: () => {
+      alert('The meeting has been concluded by the host.')
+      navigate('/app')
+    },
+    onForceDisconnect: () => {
+      alert('You have been removed from the meeting by the host.')
+      navigate('/app')
+    },
+  })
 
+  // Speech Recognition Subtitles
   useSpeechRecognition(roomId)
 
-  const chatEndRef = useRef<HTMLDivElement | null>(null)
+  // Validate Meeting Room & Host Status
+  useEffect(() => {
+    meetingService
+      .validateMeeting(roomId)
+      .then((res) => {
+        setIsHost(res.isHost)
+      })
+      .catch((err) => console.warn('Room validation check:', err))
+  }, [roomId])
 
-  // Meeting Duration Timer
+  // Synchronize meeting ID and load persistent chat history
+  useEffect(() => {
+    setRoomId(roomId)
+
+    // Load persistent messages from database
+    meetingService
+      .getMeetingMessages(roomId)
+      .then((history) => {
+        if (Array.isArray(history) && history.length > 0) {
+          history.forEach((msg) => {
+            addMessage({
+              id: msg._id || msg.id,
+              sender: msg.senderName,
+              text: msg.content,
+              timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            })
+          })
+        }
+      })
+      .catch((err) => console.warn('Could not load chat history:', err))
+
+    // Initialize local hardware media tracks
+    initMedia()
+  }, [roomId, setRoomId, initMedia, addMessage])
+
+  // Meeting duration timer
   useEffect(() => {
     const timer = setInterval(() => {
       setMeetingSeconds((sec) => sec + 1)
@@ -130,63 +279,56 @@ export const MeetingRoomPage: React.FC = () => {
     return () => clearInterval(timer)
   }, [])
 
-  // Format Duration HH:MM:SS
+  // Format seconds into HH:MM:SS
   const formatDuration = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60)
+    const hrs = Math.floor(totalSeconds / 3600)
+    const mins = Math.floor((totalSeconds % 3600) / 60)
     const secs = totalSeconds % 60
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    return `${hrs > 0 ? `${hrs}:` : ''}${mins.toString().padStart(2, '0')}:${secs
+      .toString()
+      .padStart(2, '0')}`
   }
 
-  // Socket room joining and listeners
+  // Socket room chat events
   useEffect(() => {
-    setRoomId(roomId)
-    initMedia()
+    if (!socket) return
 
-    if (socket && roomId) {
-      socket.emit('join-room', {
-        roomId,
-        userName: user.name,
-        userId: user.id,
-      })
+    const handleReceiveMessage = (msg: ChatMessage) => {
+      addMessage(msg)
+    }
 
-      socket.on('user-joined', (data: { userName: string }) => {
-        addMessage({
-          id: `sys_${Date.now()}`,
-          sender: 'IntellMeet Hub',
-          text: `${data.userName} joined the meeting.`,
-          isSystem: true,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        })
-        setParticipantsCount(participantsCount + 1)
-      })
-
-      socket.on('receive-message', (msg: ChatMessage) => {
-        addMessage(msg)
-      })
-
-      socket.on('user-left', (data: { userName: string }) => {
-        addMessage({
-          id: `sys_${Date.now()}`,
-          sender: 'IntellMeet Hub',
-          text: `${data.userName || 'A participant'} left the meeting.`,
-          isSystem: true,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        })
+    const handleUserJoined = (data: { userName: string }) => {
+      addMessage({
+        id: `sys_${Date.now()}`,
+        sender: 'IntellMeet Hub',
+        text: `${data.userName} joined the meeting.`,
+        isSystem: true,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       })
     }
+
+    const handleUserLeft = (data: { userName: string }) => {
+      addMessage({
+        id: `sys_${Date.now()}`,
+        sender: 'IntellMeet Hub',
+        text: `${data.userName || 'A participant'} left the meeting.`,
+        isSystem: true,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      })
+    }
+
+    socket.on('receive-message', handleReceiveMessage)
+    socket.on('user-joined', handleUserJoined)
+    socket.on('user-left', handleUserLeft)
 
     return () => {
-      if (socket) {
-        socket.emit('leave-room', { roomId })
-        socket.off('user-joined')
-        socket.off('receive-message')
-        socket.off('user-left')
-      }
-      resetMeetingState()
+      socket.off('receive-message', handleReceiveMessage)
+      socket.off('user-joined', handleUserJoined)
+      socket.off('user-left', handleUserLeft)
     }
-  }, [roomId, socket, user.name, user.id])
+  }, [socket, addMessage])
 
-  // Scroll to bottom on new chat
+  // Scroll to bottom on new message
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -196,16 +338,16 @@ export const MeetingRoomPage: React.FC = () => {
     e.preventDefault()
     if (!messageInput.trim() || !socket) return
 
-    const newMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      sender: user.name,
-      text: messageInput.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }
+    const text = messageInput.trim()
 
     socket.emit('send-message', {
       roomId,
-      message: newMsg,
+      message: {
+        text,
+        content: text,
+        sender: user.name,
+        senderId: user.id,
+      },
     })
 
     setMessageInput('')
@@ -239,117 +381,163 @@ export const MeetingRoomPage: React.FC = () => {
     }
   }
 
-  // End Meeting & Save to MongoDB
-  const handleConfirmLeave = async (endForAll = false) => {
-    try {
-      await meetingService.saveMeeting({
-        roomId,
-        title: `Session: ${roomId}`,
-        hostName: user.name,
-        participants: [user.name, ...peers.map((p) => p.name)],
-        summary: aiSummary || 'Session concluded with live peer streaming.',
-        keyDecisions,
-        actionItems,
-      })
-    } catch {
-      // Gracefully navigate
+  // Toggle Meeting Cloud Recording
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      const rec = await stopRecording(meetingSeconds)
+      if (rec) {
+        addMessage({
+          id: `rec_${Date.now()}`,
+          sender: 'IntellMeet Hub',
+          text: `Recording saved to cloud object storage: ${rec.title || 'Session Recording'}.`,
+          isSystem: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        })
+      }
+    } else {
+      startRecording()
     }
-    setLeaveModalOpen(false)
-    navigate('/app/history')
   }
 
+  // Leave / End Meeting
+  const handleConfirmLeave = async (endForAll = false) => {
+    try {
+      if (endForAll && isHost) {
+        endMeetingForAll()
+      } else {
+        await meetingService.saveMeeting({
+          roomId,
+          title: `Session: ${roomId}`,
+          hostName: user.name,
+          participants: [user.name, ...peers.map((p) => p.userName)],
+          summary: aiSummary || 'Session concluded with live peer streaming.',
+          keyDecisions,
+          actionItems,
+        })
+      }
+    } catch (err: unknown) {
+      console.warn('Error saving meeting report on leave:', err)
+    } finally {
+      resetMeetingState()
+      navigate('/app')
+    }
+  }
+
+  const isLocalSpeaking = activeSpeakerId === user.id
+  const hasRemoteScreenShare = peers.some((p) => p.screenSharing)
+
   return (
-    <div className="h-screen w-screen bg-[#0B0F19] text-white flex flex-col overflow-hidden font-sans select-none">
-      {/* 1. Studio Top Status Bar */}
-      <header className="h-14 bg-[#101828]/90 border-b border-white/10 px-4 sm:px-6 flex items-center justify-between shrink-0 z-30">
+    <div className="h-screen w-screen bg-[#0B0F19] text-white flex flex-col overflow-hidden select-none font-sans">
+      {/* 1. Header Control Bar */}
+      <header className="h-14 px-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#0B0F19]/90 backdrop-blur-md z-20">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center text-white">
-            <Video className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-heading font-bold text-sm text-white">
-                Intell<span className="text-[#60A5FA]">Meet</span>
-              </span>
-              <span className="text-white/40">/</span>
-              <span className="text-xs font-semibold text-slate-200">
-                {roomId}
-              </span>
-              <span className="bg-white/10 text-[#60A5FA] border border-white/10 text-[10px] font-mono px-2 py-0.5 rounded">
-                E2EE
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Live Timer & Recording Status */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-black/40 border border-white/10 px-3 py-1 rounded-full text-xs font-mono text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-[#60A5FA]" />
-            <span>{formatDuration(meetingSeconds)}</span>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#12B76A] animate-pulse" />
+            <h1 className="font-heading text-sm font-semibold text-white tracking-wide">
+              {roomId}
+            </h1>
           </div>
 
-          {isRecording && (
-            <div className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-2.5 py-1 rounded-full font-semibold animate-pulse">
-              <Circle className="w-2 h-2 fill-current" />
-              <span>REC</span>
-            </div>
-          )}
-        </div>
+          <div className="hidden sm:flex items-center gap-2">
+            <Badge variant="gray" size="sm" className="text-slate-300 border-white/10 bg-white/5">
+              <Shield className="w-3 h-3 text-[#12B76A] mr-1" />
+              WebRTC E2EE
+            </Badge>
 
-        {/* Right Header CTAs */}
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleCopyInvite}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-200 transition-colors"
-          >
-            {copiedLink ? (
-              <Check className="w-3.5 h-3.5 text-[#12B76A]" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
+            {isRecording && (
+              <Badge variant="error" size="sm" className="bg-[#F04438]/20 text-[#F04438] border border-[#F04438]/40 animate-pulse">
+                <Radio className="w-3 h-3 mr-1" />
+                REC
+              </Badge>
             )}
-            <span>{copiedLink ? 'Link Copied' : 'Invite'}</span>
-          </button>
+          </div>
+        </div>
 
-          <button
+        {/* Center: Meeting Duration Clock */}
+        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-xs font-mono text-slate-300">
+          <Clock className="w-3.5 h-3.5 text-[#60A5FA]" />
+          <span>{formatDuration(meetingSeconds)}</span>
+        </div>
+
+        {/* Right Header Actions */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            icon={copiedLink ? <Check className="w-3.5 h-3.5 text-[#12B76A]" /> : <Copy className="w-3.5 h-3.5" />}
+            onClick={handleCopyInvite}
+            className="text-xs bg-white/5 border-white/10 text-white hover:bg-white/10"
+          >
+            {copiedLink ? 'Copied Link' : 'Copy Invite'}
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Settings className="w-3.5 h-3.5" />}
+            onClick={() => setDeviceModalOpen(true)}
+            className="text-xs bg-white/5 border-white/10 text-white hover:bg-white/10"
+          >
+            Hardware
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Sparkles className="w-3.5 h-3.5" />}
             onClick={handleGenerateSummary}
             disabled={isGeneratingAi}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-xs font-semibold text-white shadow-subtle transition-colors disabled:opacity-50"
+            className="text-xs bg-[#2563EB] hover:bg-[#1D4ED8]"
           >
-            {isGeneratingAi ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5 text-[#60A5FA]" />
-            )}
-            <span>AI Minutes</span>
-          </button>
+            {isGeneratingAi ? 'Analyzing...' : 'AI Minutes'}
+          </Button>
         </div>
       </header>
 
-      {/* 2. Main Stage & Video Mesh Layout */}
-      <div className="flex-1 flex min-h-0 relative">
-        {/* Main Video Stage */}
-        <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between overflow-hidden relative">
-          {/* Active Screen Sharing Pinned View OR Participant Grid */}
-          {isScreenSharing ? (
+      {/* 2. Main Stage & Video Viewport */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Left Video Grid Area */}
+        <div className="flex-1 flex flex-col p-3 sm:p-4 gap-3 overflow-hidden relative">
+          {/* Permission or device warning */}
+          {deviceError && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 bg-amber-500/20 border border-amber-500/40 text-amber-200 px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-xl backdrop-blur-md">
+              <Info className="w-4 h-4 text-amber-400" />
+              <span>{deviceError}</span>
+            </div>
+          )}
+
+          {/* Screen Share Stage View */}
+          {isScreenSharing || hasRemoteScreenShare ? (
             <div className="flex-1 flex flex-col gap-3 min-h-0">
-              {/* Screen Stream Hero */}
-              <div className="flex-1 rounded-2xl bg-black border border-white/10 relative overflow-hidden flex items-center justify-center">
-                <video
-                  ref={screenVideoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-contain"
-                />
-                <div className="absolute top-3 left-3 bg-black/70 px-3 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-2">
-                  <MonitorUp className="w-3.5 h-3.5 text-[#60A5FA]" />
-                  <span>You are sharing your screen</span>
+              {/* Pinned presentation view */}
+              <div className="flex-1 rounded-2xl bg-black border border-white/10 relative overflow-hidden flex items-center justify-center shadow-2xl">
+                {isScreenSharing ? (
+                  <video
+                    ref={screenVideoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <video
+                    autoPlay
+                    playsInline
+                    ref={(el) => {
+                      const peerScreen = peers.find((p) => p.screenSharing)
+                      if (el && peerScreen?.stream) el.srcObject = peerScreen.stream
+                    }}
+                    className="w-full h-full object-contain"
+                  />
+                )}
+                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-xs px-3 py-1 rounded-lg text-xs font-semibold text-white flex items-center gap-2">
+                  <MonitorUp className="w-4 h-4 text-[#60A5FA]" />
+                  <span>{isScreenSharing ? 'You are sharing your screen' : 'Screen Share Active'}</span>
                 </div>
               </div>
 
-              {/* Strip of participants below screen */}
+              {/* Participant camera strip below shared screen */}
               <div className="h-32 flex gap-3 overflow-x-auto shrink-0 pb-1">
-                {/* Local Camera Tile */}
+                {/* Local user tile */}
                 <div className="w-48 h-full rounded-xl bg-[#111827] border border-white/10 relative overflow-hidden shrink-0">
                   {isCamOn ? (
                     <video
@@ -369,32 +557,41 @@ export const MeetingRoomPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Peer Tiles */}
+                {/* Peer tiles */}
                 {peers.map((peer) => (
                   <div
-                    key={peer.id}
+                    key={peer.socketId}
                     className="w-48 h-full rounded-xl bg-[#111827] border border-white/10 relative overflow-hidden shrink-0"
                   >
-                    <img
-                      src={peer.avatar}
-                      alt={peer.name}
-                      className="w-full h-full object-cover"
+                    <PeerVideoTile
+                      peer={peer}
+                      isActiveSpeaker={activeSpeakerId === peer.userId}
+                      onMute={() => muteParticipant(peer.socketId)}
+                      onRemove={() => removeParticipant(peer.socketId)}
+                      canModerate={isHost}
                     />
-                    <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-white">
-                      {peer.name}
-                    </div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            /* Standard Dynamic Video Grid (1, 2, 3, 4 participants) */
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4 min-h-0">
+            /* Standard Dynamic Multi-User Video Grid */
+            <div
+              className={`flex-1 grid gap-3 sm:gap-4 min-h-0 ${
+                peers.length === 0
+                  ? 'grid-cols-1'
+                  : peers.length === 1
+                  ? 'grid-cols-1 sm:grid-cols-2'
+                  : peers.length === 2
+                  ? 'grid-cols-1 sm:grid-cols-3'
+                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2'
+              }`}
+            >
               {/* 1. Local User Video Tile */}
               <div
-                className={`rounded-2xl bg-[#111827] relative overflow-hidden flex items-center justify-center shadow-lg transition-all ${
-                  activeSpeaker === user.name
-                    ? 'border-2 border-[#12B76A] ring-2 ring-[#12B76A]/20'
+                className={`rounded-2xl bg-[#111827] relative overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 ${
+                  isLocalSpeaking
+                    ? 'border-2 border-[#12B76A] ring-4 ring-[#12B76A]/20'
                     : 'border border-white/10'
                 }`}
               >
@@ -407,12 +604,18 @@ export const MeetingRoomPage: React.FC = () => {
                     className="w-full h-full object-cover scale-x-[-1]"
                   />
                 ) : (
-                  <div className="flex flex-col items-center gap-3 text-slate-400">
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.name}
-                      className="w-20 h-20 rounded-full object-cover ring-2 ring-white/10"
-                    />
+                  <div className="flex flex-col items-center gap-3 text-slate-400 p-4">
+                    {user.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.name}
+                        className="w-20 h-20 rounded-full object-cover ring-2 ring-white/10"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-white font-bold text-xl shadow-inner">
+                        {user.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
                     <div className="text-xs font-medium text-slate-300">
                       {user.name} (Camera Off)
                     </div>
@@ -420,8 +623,8 @@ export const MeetingRoomPage: React.FC = () => {
                 )}
 
                 {/* Top Badge: Active Speaker */}
-                {activeSpeaker === user.name && (
-                  <div className="absolute top-3 left-3 bg-[#12B76A]/90 text-black px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow">
+                {isLocalSpeaking && (
+                  <div className="absolute top-3 left-3 bg-[#12B76A] text-black px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow">
                     <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
                     Speaking
                   </div>
@@ -431,6 +634,11 @@ export const MeetingRoomPage: React.FC = () => {
                 <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
                   <div className="bg-black/80 backdrop-blur-xs px-2.5 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-2">
                     <span>{user.name} (You)</span>
+                    {isHost && (
+                      <span className="bg-[#2563EB]/40 text-[#60A5FA] border border-[#60A5FA]/40 text-[9px] px-1 py-0.2 rounded font-semibold">
+                        Host
+                      </span>
+                    )}
                   </div>
 
                   <div className="bg-black/80 p-1.5 rounded-lg text-white">
@@ -443,504 +651,436 @@ export const MeetingRoomPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* 2. Peer Participant Tile 1 */}
-              <div className="rounded-2xl bg-[#111827] border border-white/10 relative overflow-hidden flex items-center justify-center shadow-lg">
-                <img
-                  src={peers[0].avatar}
-                  alt={peers[0].name}
-                  className="w-full h-full object-cover"
+              {/* 2. Remote Peer Video Tiles */}
+              {peers.map((peer) => (
+                <PeerVideoTile
+                  key={peer.socketId}
+                  peer={peer}
+                  isActiveSpeaker={activeSpeakerId === peer.userId}
+                  onMute={() => muteParticipant(peer.socketId)}
+                  onRemove={() => removeParticipant(peer.socketId)}
+                  canModerate={isHost}
                 />
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                  <div className="bg-black/80 px-2.5 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-2">
-                    <span>{peers[0].name}</span>
-                    <Badge variant="primary" size="sm">
-                      {peers[0].role}
-                    </Badge>
-                  </div>
-                  <div className="bg-black/80 p-1.5 rounded-lg text-white">
-                    <Mic className="w-3.5 h-3.5 text-[#12B76A]" />
-                  </div>
-                </div>
-              </div>
+              ))}
 
-              {/* 3. Peer Participant Tile 2 */}
-              <div className="rounded-2xl bg-[#111827] border border-white/10 relative overflow-hidden flex items-center justify-center shadow-lg">
-                <div className="flex flex-col items-center gap-3 text-slate-400">
-                  <img
-                    src={peers[1].avatar}
-                    alt={peers[1].name}
-                    className="w-20 h-20 rounded-full object-cover ring-2 ring-white/10"
-                  />
-                  <div className="text-xs font-medium text-slate-300">
-                    {peers[1].name} (Audio Only)
+              {/* Empty State: Waiting for attendees */}
+              {peers.length === 0 && (
+                <div className="hidden sm:flex rounded-2xl bg-[#111827]/40 border border-dashed border-white/10 flex-col items-center justify-center text-center p-6 space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400">
+                    <Users className="w-6 h-6 text-[#60A5FA]" />
                   </div>
-                </div>
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                  <div className="bg-black/80 px-2.5 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-2">
-                    <span>{peers[1].name}</span>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Waiting for participants to join</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                      Share the meeting room link with your team to begin collaborating in real time.
+                    </p>
                   </div>
-                  <div className="bg-black/80 p-1.5 rounded-lg text-white">
-                    <MicOff className="w-3.5 h-3.5 text-[#F04438]" />
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={copiedLink ? <Check className="w-3.5 h-3.5 text-[#12B76A]" /> : <Copy className="w-3.5 h-3.5" />}
+                    onClick={handleCopyInvite}
+                    className="text-xs bg-white/5 border-white/10 text-white hover:bg-white/10"
+                  >
+                    {copiedLink ? 'Link Copied!' : 'Copy Meeting Invite'}
+                  </Button>
                 </div>
-              </div>
-
-              {/* 4. AI Meeting Intelligence Observer Tile */}
-              <div className="rounded-2xl bg-[#101828] border border-[#2563EB]/40 relative overflow-hidden flex flex-col items-center justify-center p-6 text-center space-y-3 shadow-lg">
-                <div className="w-14 h-14 rounded-2xl bg-[#2563EB]/20 border border-[#2563EB]/40 flex items-center justify-center text-[#60A5FA]">
-                  <Sparkles className="w-7 h-7 animate-pulse" />
-                </div>
-                <div>
-                  <h4 className="font-heading font-bold text-sm text-white">
-                    IntellMeet AI Assistant
-                  </h4>
-                  <p className="text-xs text-slate-400 max-w-xs mt-1">
-                    Live speech-to-text active. Summarizing discussion and extracting action items.
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-1.5 bg-[#12B76A]/10 text-[#12B76A] border border-[#12B76A]/30 text-[10px] font-semibold px-2.5 py-0.5 rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#12B76A] animate-pulse" />
-                  Recording & Transcribing
-                </div>
-              </div>
+              )}
             </div>
           )}
 
-          {/* Device Error Notification */}
-          {deviceError && (
-            <div className="absolute top-4 left-4 right-4 bg-amber-950/90 border border-amber-800 text-amber-300 p-3 rounded-xl text-xs flex items-center gap-2">
-              <Info className="w-4 h-4 shrink-0" />
-              <span>{deviceError}</span>
-            </div>
-          )}
-
-          {/* Spoken Subtitle Overlay (Live SpeechRecognition) */}
+          {/* Floating On-Device Real-time Subtitles */}
           {isTranscribing && liveSubtitle && (
-            <div className="absolute bottom-20 left-6 right-6 flex justify-center pointer-events-none">
-              <div className="max-w-2xl bg-black/85 backdrop-blur-md border border-white/10 px-5 py-2.5 rounded-2xl shadow-2xl text-center space-y-0.5 animate-fade-in">
-                <div className="text-[10px] font-semibold text-[#60A5FA] uppercase tracking-wider flex items-center justify-center gap-1">
-                  <Captions className="w-3 h-3" />
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 max-w-xl w-full px-4 z-20 pointer-events-none">
+              <div className="bg-black/85 backdrop-blur-md border border-white/15 px-4 py-2.5 rounded-2xl shadow-2xl text-center space-y-0.5 animate-fade-in">
+                <div className="text-[11px] font-semibold text-[#60A5FA]">
                   {liveSubtitleSpeaker || user.name}
                 </div>
-                <div className="text-sm text-slate-100 font-medium leading-relaxed">
-                  "{liveSubtitle}"
+                <div className="text-xs text-white font-medium leading-relaxed">
+                  {liveSubtitle}
                 </div>
               </div>
             </div>
           )}
-
-          {/* 3. Floating Bottom Control Dock */}
-          <div className="h-16 bg-[#101828]/95 border border-white/10 rounded-2xl px-4 flex items-center justify-between shadow-2xl mt-3 shrink-0">
-            {/* Left Controls: Mic & Camera */}
-            <div className="flex items-center gap-2">
-              {/* Mic Button */}
-              <button
-                onClick={toggleMic}
-                className={`p-3 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all ${
-                  isMicOn
-                    ? 'bg-white/10 hover:bg-white/15 text-white'
-                    : 'bg-[#F04438] text-white shadow-lg'
-                }`}
-              >
-                {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                <span className="hidden md:inline">{isMicOn ? 'Mute' : 'Unmute'}</span>
-              </button>
-
-              {/* Camera Button */}
-              <button
-                onClick={toggleCam}
-                className={`p-3 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all ${
-                  isCamOn
-                    ? 'bg-white/10 hover:bg-white/15 text-white'
-                    : 'bg-[#F04438] text-white shadow-lg'
-                }`}
-              >
-                {isCamOn ? (
-                  <VideoIcon className="w-4 h-4" />
-                ) : (
-                  <VideoOff className="w-4 h-4" />
-                )}
-                <span className="hidden md:inline">{isCamOn ? 'Stop Video' : 'Start Video'}</span>
-              </button>
-            </div>
-
-            {/* Center Controls: Screen share, Recording, Captions */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={toggleScreenShare}
-                className={`p-3 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all ${
-                  isScreenSharing
-                    ? 'bg-[#2563EB] text-white'
-                    : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-              >
-                <MonitorUp className="w-4 h-4" />
-                <span className="hidden sm:inline">
-                  {isScreenSharing ? 'Stop Share' : 'Share Screen'}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setIsRecording(!isRecording)}
-                className={`p-3 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all ${
-                  isRecording
-                    ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                    : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-              >
-                <Radio className="w-4 h-4" />
-                <span className="hidden sm:inline">
-                  {isRecording ? 'Recording' : 'Record'}
-                </span>
-              </button>
-
-              <button
-                onClick={toggleTranscribing}
-                className={`p-3 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all ${
-                  isTranscribing
-                    ? 'bg-[#2563EB]/20 text-[#60A5FA] border border-[#2563EB]/40'
-                    : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-              >
-                <Captions className="w-4 h-4" />
-                <span className="hidden sm:inline">Captions</span>
-              </button>
-            </div>
-
-            {/* Right Controls: Panels toggle & Leave */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveSideTab(activeSideTab === 'participants' ? 'chat' : 'participants')}
-                className={`p-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  activeSideTab === 'participants'
-                    ? 'bg-[#2563EB] text-white'
-                    : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span className="hidden md:inline">{peers.length + 1}</span>
-              </button>
-
-              <button
-                onClick={() => setActiveSideTab(activeSideTab === 'chat' ? 'ai' : 'chat')}
-                className={`p-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  activeSideTab === 'chat'
-                    ? 'bg-[#2563EB] text-white'
-                    : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-              >
-                <MessageSquare className="w-4 h-4" />
-                {messages.length > 0 && (
-                  <span className="bg-[#2563EB] text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                    {messages.length}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setActiveSideTab('ai')}
-                className={`p-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  activeSideTab === 'ai'
-                    ? 'bg-[#2563EB] text-white'
-                    : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 text-[#60A5FA]" />
-                <span className="hidden md:inline">AI Panel</span>
-              </button>
-
-              <button
-                onClick={() => setLeaveModalOpen(true)}
-                className="bg-[#F04438] hover:bg-[#D92D20] text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg transition-all ml-1"
-              >
-                <PhoneOff className="w-4 h-4" />
-                <span>Leave</span>
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* 4. Right Side Drawer: Chat, Participants, or AI Minutes */}
-        <div className="w-80 sm:w-96 bg-[#101828] border-l border-white/10 flex flex-col shrink-0">
-          {/* Drawer Top Navigation Header */}
-          <div className="h-14 border-b border-white/10 px-3 flex items-center justify-between bg-black/20">
-            <div className="flex gap-1">
-              <button
-                onClick={() => setActiveSideTab('chat')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                  activeSideTab === 'chat'
-                    ? 'bg-[#2563EB] text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                Chat
-              </button>
+        {/* Right Side Drawer: Chat / AI Minutes / Participants */}
+        <aside className="w-80 sm:w-96 border-l border-white/10 bg-[#0E131F] flex flex-col shrink-0 z-20">
+          {/* Tab Selection */}
+          <div className="flex border-b border-white/10 p-2 gap-1 bg-[#0B0F19]/60">
+            <button
+              onClick={() => setActiveSideTab('chat')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
+                activeSideTab === 'chat' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat</span>
+              {messages.length > 0 && (
+                <span className="bg-white/20 px-1.5 py-0.2 rounded-full text-[10px]">
+                  {messages.length}
+                </span>
+              )}
+            </button>
 
-              <button
-                onClick={() => setActiveSideTab('participants')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                  activeSideTab === 'participants'
-                    ? 'bg-[#2563EB] text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                People ({peers.length + 1})
-              </button>
+            <button
+              onClick={() => setActiveSideTab('participants')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
+                activeSideTab === 'participants' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>People ({peers.length + 1})</span>
+            </button>
 
-              <button
-                onClick={() => setActiveSideTab('ai')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                  activeSideTab === 'ai'
-                    ? 'bg-[#2563EB] text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#60A5FA]" />
-                AI
-              </button>
-            </div>
+            <button
+              onClick={() => setActiveSideTab('ai')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
+                activeSideTab === 'ai' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Minutes</span>
+            </button>
           </div>
 
-          {/* Drawer Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            {/* Panel 1: Chat */}
-            {activeSideTab === 'chat' && (
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 dark-scroll">
-                  {messages.length === 0 ? (
-                    <div className="py-16 text-center text-xs text-slate-500">
-                      No chat messages yet. Say hello to the room!
-                    </div>
-                  ) : (
-                    messages.map((m) => (
-                      <div
-                        key={m.id}
-                        className={`space-y-1 ${
-                          m.isSystem
-                            ? 'text-center my-2'
-                            : m.sender === user.name
-                            ? 'text-right'
-                            : 'text-left'
-                        }`}
-                      >
-                        {m.isSystem ? (
-                          <span className="inline-block text-[11px] px-3 py-1 rounded-full bg-white/10 text-slate-300">
-                            {m.text}
-                          </span>
-                        ) : (
-                          <div>
-                            <div className="text-[10px] text-slate-400">
-                              {m.sender} • {m.timestamp}
-                            </div>
-                            <div
-                              className={`inline-block px-3.5 py-2 rounded-2xl text-xs max-w-[85%] text-left ${
-                                m.sender === user.name
-                                  ? 'bg-[#2563EB] text-white rounded-br-none'
-                                  : 'bg-[#182235] text-slate-200 rounded-bl-none border border-white/5'
-                              }`}
-                            >
-                              {m.text}
-                            </div>
+          {/* Drawer Body: 1. Chat Tab */}
+          {activeSideTab === 'chat' && (
+            <div className="flex-1 flex flex-col justify-between overflow-hidden">
+              <div className="flex-1 p-3 space-y-3 overflow-y-auto">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs text-center p-4">
+                    <MessageSquare className="w-8 h-8 mb-2 opacity-40 text-slate-400" />
+                    <span>No messages yet. Real-time chat messages are encrypted and persistent.</span>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col text-xs ${
+                        msg.isSystem ? 'items-center my-2 text-slate-500 text-[11px]' : 'space-y-1'
+                      }`}
+                    >
+                      {msg.isSystem ? (
+                        <div className="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-slate-400">
+                          {msg.text}
+                        </div>
+                      ) : (
+                        <div
+                          className={`rounded-xl p-2.5 max-w-[85%] ${
+                            msg.sender === user.name
+                              ? 'ml-auto bg-[#2563EB] text-white'
+                              : 'mr-auto bg-white/10 text-slate-200 border border-white/5'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3 text-[10px] text-white/70 mb-1">
+                            <span className="font-semibold">{msg.sender}</span>
+                            <span>{msg.timestamp}</span>
                           </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                {/* Send Input */}
-                <form
-                  onSubmit={handleSendMessage}
-                  className="p-3 border-t border-white/10 bg-black/20 flex items-center gap-2"
-                >
-                  <input
-                    type="text"
-                    placeholder="Send a message to room..."
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    className="flex-1 rounded-xl bg-[#182235] border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#2563EB]"
-                  />
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    disabled={!messageInput.trim()}
-                    icon={<Send className="w-3.5 h-3.5" />}
-                  >
-                    Send
-                  </Button>
-                </form>
+                          <div className="leading-relaxed">{msg.text}</div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+                <div ref={chatEndRef} />
               </div>
-            )}
 
-            {/* Panel 2: Participant Management */}
-            {activeSideTab === 'participants' && (
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 dark-scroll">
-                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-white/10">
-                  <span>In Meeting ({peers.length + 1})</span>
-                  <button className="text-[#60A5FA] font-medium hover:underline">
-                    Mute All
-                  </button>
+              {/* Chat Form */}
+              <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10 flex gap-2 bg-[#0B0F19]/50">
+                <input
+                  type="text"
+                  placeholder="Send a real-time message..."
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#2563EB]"
+                />
+                <Button type="submit" variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5" />}>
+                  Send
+                </Button>
+              </form>
+            </div>
+          )}
+
+          {/* Drawer Body: 2. Participants Tab */}
+          {activeSideTab === 'participants' && (
+            <div className="flex-1 p-3 overflow-y-auto space-y-4">
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  In this meeting ({peers.length + 1})
                 </div>
 
-                {/* Host (Current User) */}
-                <div className="p-3 rounded-xl bg-[#182235] border border-white/10 flex items-center justify-between">
+                {/* You */}
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5">
                   <div className="flex items-center gap-2.5">
                     <img
                       src={user.avatarUrl}
                       alt={user.name}
-                      className="w-8 h-8 rounded-full object-cover"
+                      className="w-7 h-7 rounded-lg object-cover"
                     />
                     <div>
-                      <div className="text-xs font-semibold text-white">{user.name} (You)</div>
-                      <div className="text-[10px] text-[#60A5FA]">Meeting Host</div>
+                      <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                        <span>{user.name}</span>
+                        <span className="text-[10px] text-slate-400">(You)</span>
+                      </div>
+                      <div className="text-[10px] text-[#12B76A]">Online</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-400">
                     {isMicOn ? <Mic className="w-3.5 h-3.5 text-[#12B76A]" /> : <MicOff className="w-3.5 h-3.5 text-[#F04438]" />}
-                    {isCamOn ? <VideoIcon className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5 text-slate-500" />}
+                    {isCamOn ? <Video className="w-3.5 h-3.5 text-[#12B76A]" /> : <VideoOff className="w-3.5 h-3.5 text-[#F04438]" />}
                   </div>
                 </div>
 
-                {/* Other Peers */}
+                {/* Remote Peers */}
                 {peers.map((peer) => (
-                  <div
-                    key={peer.id}
-                    className="p-3 rounded-xl bg-[#182235]/60 border border-white/5 flex items-center justify-between"
-                  >
+                  <div key={peer.socketId} className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5">
                     <div className="flex items-center gap-2.5">
-                      <img
-                        src={peer.avatar}
-                        alt={peer.name}
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
+                      {peer.avatarUrl ? (
+                        <img
+                          src={peer.avatarUrl}
+                          alt={peer.userName}
+                          className="w-7 h-7 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-lg bg-[#1E293B] text-white flex items-center justify-center text-xs font-bold">
+                          {peer.userName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                       <div>
-                        <div className="text-xs font-semibold text-white">{peer.name}</div>
-                        <div className="text-[10px] text-slate-400">{peer.role}</div>
+                        <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                          <span>{peer.userName}</span>
+                          {peer.isHost && (
+                            <span className="bg-[#2563EB]/40 text-[#60A5FA] text-[9px] px-1 rounded">
+                              Host
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 capitalize">{peer.connectionState || 'Connected'}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        title="Toggle mute for participant"
-                        className="p-1.5 rounded bg-black/40 text-slate-300 hover:text-white"
-                      >
-                        {peer.isMuted ? (
-                          <VolumeX className="w-3.5 h-3.5 text-[#F04438]" />
-                        ) : (
-                          <Volume2 className="w-3.5 h-3.5 text-[#12B76A]" />
-                        )}
-                      </button>
+
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      {isHost && (
+                        <button
+                          onClick={() => muteParticipant(peer.socketId)}
+                          title="Mute user"
+                          className="hover:text-white p-1"
+                        >
+                          <MicOff className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {peer.audioEnabled ? <Mic className="w-3.5 h-3.5 text-[#12B76A]" /> : <MicOff className="w-3.5 h-3.5 text-[#F04438]" />}
+                      {peer.videoEnabled ? <Video className="w-3.5 h-3.5 text-[#12B76A]" /> : <VideoOff className="w-3.5 h-3.5 text-[#F04438]" />}
                     </div>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Panel 3: AI Intelligence & Minutes */}
-            {activeSideTab === 'ai' && (
-              <div className="flex-1 overflow-y-auto p-4 space-y-5 dark-scroll text-xs">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                  <div className="flex items-center gap-1.5 font-bold text-white uppercase tracking-wider text-[11px]">
-                    <Sparkles className="w-3.5 h-3.5 text-[#60A5FA]" />
-                    Autonomous Intelligence
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="xs"
-                    loading={isGeneratingAi}
-                    onClick={handleGenerateSummary}
-                  >
-                    Refresh AI
-                  </Button>
+          {/* Drawer Body: 3. AI Minutes & Highlights */}
+          {activeSideTab === 'ai' && (
+            <div className="flex-1 p-3 overflow-y-auto space-y-4 text-xs">
+              {/* Executive Summary */}
+              <div className="space-y-1.5">
+                <div className="font-heading text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-[#2563EB]" />
+                  <span>Executive Minutes</span>
                 </div>
-
-                {/* Executive Summary */}
-                <div className="space-y-2">
-                  <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-[#60A5FA]" />
-                    Executive Summary
-                  </div>
-                  <div className="p-3 rounded-xl bg-[#182235] border border-white/10 text-slate-300 leading-relaxed text-xs">
-                    {aiSummary ||
-                      'AI summary will update automatically as discussions proceed. Click "Refresh AI" to extract current progress.'}
-                  </div>
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 leading-relaxed text-[11px]">
+                  {aiSummary || 'AI Minutes will automatically crystallize discussions and key takeaways once the meeting progresses.'}
                 </div>
+              </div>
 
-                {/* Key Decisions */}
-                {keyDecisions.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="font-semibold text-[#12B76A] flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5" />
-                      Key Decisions ({keyDecisions.length})
-                    </div>
-                    <ul className="space-y-1.5">
-                      {keyDecisions.map((dec, idx) => (
-                        <li key={idx} className="p-2.5 rounded-lg bg-[#182235] border border-white/5 text-slate-200 flex items-start gap-2">
-                          <span className="text-[#12B76A] font-bold">•</span>
-                          <span>{dec}</span>
-                        </li>
-                      ))}
-                    </ul>
+              {/* Action Items */}
+              <div className="space-y-2">
+                <div className="font-heading text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <ListTodo className="w-3.5 h-3.5 text-[#12B76A]" />
+                  <span>Extracted Commitments</span>
+                </div>
+                {actionItems.length === 0 ? (
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-slate-500 text-[11px]">
+                    No action items detected yet.
                   </div>
-                )}
-
-                {/* Action Items */}
-                {actionItems.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="font-semibold text-[#F79009] flex items-center gap-1.5">
-                      <ListTodo className="w-3.5 h-3.5" />
-                      Action Items ({actionItems.length})
-                    </div>
-                    <div className="space-y-1.5">
-                      {actionItems.map((item) => (
-                        <div
-                          key={item.id}
-                          onClick={() => toggleActionItem(item.id)}
-                          className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-start gap-2 ${
-                            item.completed
-                              ? 'bg-emerald-950/20 border-emerald-800/40 text-slate-400 line-through'
-                              : 'bg-[#182235] border-white/10 text-slate-200'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={item.completed}
-                            onChange={() => {}}
-                            className="mt-0.5 rounded border-slate-700 text-[#2563EB]"
-                          />
-                          <div className="space-y-0.5">
-                            <div>{item.text}</div>
-                            <div className="text-[10px] text-[#60A5FA]">
-                              Owner: {item.assignee}
-                            </div>
-                          </div>
+                ) : (
+                  actionItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => toggleActionItem(item.id)}
+                      className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-start gap-2.5 cursor-pointer hover:bg-white/10 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.completed}
+                        onChange={() => {}}
+                        className="mt-0.5 rounded border-white/20 text-[#2563EB]"
+                      />
+                      <div className="flex-1">
+                        <div className={`text-[11px] ${item.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                          {item.text}
                         </div>
-                      ))}
+                        <div className="text-[10px] text-[#60A5FA] mt-0.5">{item.assignee}</div>
+                      </div>
                     </div>
-                  </div>
+                  ))
                 )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </aside>
       </div>
 
-      {/* Leave Meeting Confirmation Modal */}
+      {/* 3. Bottom Control Bar */}
+      <footer className="h-18 px-4 border-t border-white/10 bg-[#0B0F19] flex items-center justify-between shrink-0 z-30">
+        <div className="flex items-center gap-2">
+          {/* Microphone toggle */}
+          <button
+            onClick={toggleMic}
+            className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
+              isMicOn
+                ? 'bg-white/10 text-white hover:bg-white/15'
+                : 'bg-[#F04438] text-white hover:bg-[#D92D20]'
+            }`}
+          >
+            {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+          </button>
+
+          {/* Camera toggle */}
+          <button
+            onClick={toggleCam}
+            className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
+              isCamOn
+                ? 'bg-white/10 text-white hover:bg-white/15'
+                : 'bg-[#F04438] text-white hover:bg-[#D92D20]'
+            }`}
+          >
+            {isCamOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+          </button>
+
+          {/* Screen Share toggle */}
+          <button
+            onClick={toggleScreenShare}
+            className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
+              isScreenSharing
+                ? 'bg-[#2563EB] text-white hover:bg-[#1D4ED8]'
+                : 'bg-white/10 text-white hover:bg-white/15'
+            }`}
+          >
+            <MonitorUp className="w-5 h-5" />
+          </button>
+
+          {/* Recording toggle */}
+          <button
+            onClick={handleToggleRecording}
+            className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
+              isRecording
+                ? 'bg-[#F04438] text-white animate-pulse'
+                : 'bg-white/10 text-white hover:bg-white/15'
+            }`}
+          >
+            <Radio className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Center: Live Subtitles Caption Toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTranscribing}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all ${
+              isTranscribing
+                ? 'bg-[#12B76A]/20 text-[#12B76A] border-[#12B76A]/40'
+                : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
+            }`}
+          >
+            <Captions className="w-4 h-4" />
+            <span>{isTranscribing ? 'Subtitles ON' : 'Subtitles OFF'}</span>
+          </button>
+        </div>
+
+        {/* Right: Leave / End Meeting */}
+        <div className="flex items-center gap-3">
+          <Button
+            variant="danger"
+            size="md"
+            icon={<PhoneOff className="w-4 h-4" />}
+            onClick={() => setLeaveModalOpen(true)}
+            className="rounded-xl px-5 bg-[#F04438] hover:bg-[#D92D20] text-white font-semibold shadow-lg shadow-[#F04438]/20"
+          >
+            Leave
+          </Button>
+        </div>
+      </footer>
+
+      {/* Hardware Settings Modal */}
+      <Modal
+        isOpen={deviceModalOpen}
+        onClose={() => setDeviceModalOpen(false)}
+        title="Audio & Video Hardware Settings"
+        description="Select active microphone, camera input, and audio channels."
+      >
+        <div className="space-y-4 pt-2">
+          {/* Camera Selection */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-[#344054]">
+              Camera Hardware Input
+            </label>
+            <select
+              value={selectedVideoId}
+              onChange={(e) => switchCamera(e.target.value)}
+              className="w-full rounded-lg border border-[#D0D5DD] bg-white px-3 py-2 text-xs text-[#101828] focus:border-[#2563EB] focus:outline-none"
+            >
+              {videoInputDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Camera ${d.deviceId.slice(0, 5)}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Microphone Selection */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-[#344054]">
+              Microphone Audio Input
+            </label>
+            <select
+              value={selectedAudioId}
+              onChange={(e) => switchMicrophone(e.target.value)}
+              className="w-full rounded-lg border border-[#D0D5DD] bg-white px-3 py-2 text-xs text-[#101828] focus:border-[#2563EB] focus:outline-none"
+            >
+              {audioInputDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Microphone ${d.deviceId.slice(0, 5)}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex justify-end pt-3">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setDeviceModalOpen(false)}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Leave / End Meeting Confirmation Modal */}
       <Modal
         isOpen={leaveModalOpen}
         onClose={() => setLeaveModalOpen(false)}
-        title="Leave Meeting?"
-        description="Are you sure you want to exit the collaboration room?"
+        title="Leave Meeting"
+        description="Are you sure you want to exit the current session?"
       >
         <div className="space-y-4 pt-2">
-          <p className="text-xs text-[#667085] leading-relaxed">
-            Your attendance log and generated AI summary will be automatically saved to your workspace meeting history.
+          <p className="text-xs text-[#667085]">
+            Meeting minutes, transcriptions, and recorded media will be preserved.
           </p>
 
-          <div className="flex justify-end gap-2.5 pt-2">
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
             <Button
               variant="secondary"
               size="sm"
@@ -948,20 +1088,24 @@ export const MeetingRoomPage: React.FC = () => {
             >
               Cancel
             </Button>
+
             <Button
-              variant="danger"
+              variant="outline"
               size="sm"
               onClick={() => handleConfirmLeave(false)}
             >
-              Leave Room
+              Leave Session
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => handleConfirmLeave(true)}
-            >
-              End for All & Save
-            </Button>
+
+            {isHost && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => handleConfirmLeave(true)}
+              >
+                End Meeting for All
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

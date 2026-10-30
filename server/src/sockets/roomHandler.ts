@@ -1,10 +1,15 @@
 import { Socket, Server } from 'socket.io'
 import { logger } from '../utils/logger'
 
-interface RoomParticipant {
+export interface RoomParticipant {
   socketId: string
-  userId?: string
+  userId: string
   userName: string
+  avatarUrl?: string
+  isHost?: boolean
+  audioEnabled?: boolean
+  videoEnabled?: boolean
+  screenSharing?: boolean
   joinedAt: string
 }
 
@@ -12,7 +17,7 @@ interface RoomParticipant {
 const activeRooms = new Map<string, Map<string, RoomParticipant>>()
 
 export const registerRoomHandlers = (io: Server, socket: Socket): void => {
-  socket.on('join-room', ({ roomId, userName, userId }) => {
+  socket.on('join-room', ({ roomId, userName, userId, isHost, avatarUrl }) => {
     socket.join(roomId)
 
     if (!activeRooms.has(roomId)) {
@@ -23,22 +28,32 @@ export const registerRoomHandlers = (io: Server, socket: Socket): void => {
       socketId: socket.id,
       userId: userId || socket.id,
       userName: userName || 'Anonymous',
+      avatarUrl: avatarUrl || '',
+      isHost: Boolean(isHost),
+      audioEnabled: true,
+      videoEnabled: true,
+      screenSharing: false,
       joinedAt: new Date().toISOString(),
     }
 
     activeRooms.get(roomId)!.set(socket.id, participant)
 
-    logger.info(`👤 ${participant.userName} (${socket.id}) joined room: ${roomId}`)
+    logger.info(`👤 ${participant.userName} (${socket.id}) joined room: ${roomId} [Host: ${participant.isHost}]`)
 
-    // Notify other peers in room
+    // Notify other peers in room about new peer
     socket.to(roomId).emit('user-joined', {
-      userId: socket.id,
+      socketId: socket.id,
+      userId: participant.userId,
       userName: participant.userName,
+      avatarUrl: participant.avatarUrl,
+      isHost: participant.isHost,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     })
 
-    // Send current participants list to joining client
-    const currentUsers = Array.from(activeRooms.get(roomId)!.values())
+    // Send current participants list to joining client (excluding itself)
+    const currentUsers = Array.from(activeRooms.get(roomId)!.values()).filter(
+      (u) => u.socketId !== socket.id
+    )
     socket.emit('room-users', currentUsers)
   })
 
@@ -68,13 +83,10 @@ function handleUserLeave(io: Server, socket: Socket, roomId: string): void {
     logger.info(`🚪 User ${user?.userName} (${socket.id}) left room: ${roomId}`)
 
     io.to(roomId).emit('user-left', {
-      userId: socket.id,
+      socketId: socket.id,
+      userId: user?.userId,
       userName: user?.userName,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     })
   }
-
-  socket.leave(roomId)
 }
-
-export const getActiveRoomCount = (): number => activeRooms.size

@@ -3,6 +3,8 @@ import { Message } from '../models/Message.model'
 import { ApiResponse } from '../utils/apiResponse'
 import { db } from '../config/db'
 
+export const inMemoryMessages: any[] = []
+
 export const getMessages = async (req: Request, res: Response): Promise<void> => {
   const { meetingId } = req.query
 
@@ -10,6 +12,14 @@ export const getMessages = async (req: Request, res: Response): Promise<void> =>
     const messages = await Message.find({ meetingId }).sort({ createdAt: 1 }).lean()
     ApiResponse.success(res, messages, 'Chat messages retrieved.')
     return
+  }
+
+  if (meetingId) {
+    const filtered = inMemoryMessages.filter((m) => m.meetingId === meetingId)
+    if (filtered.length > 0) {
+      ApiResponse.success(res, filtered, 'Chat messages retrieved.')
+      return
+    }
   }
 
   ApiResponse.success(
@@ -35,5 +45,14 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
     return
   }
 
-  ApiResponse.created(res, { ...data, _id: `msg_${Date.now()}`, createdAt: new Date() }, 'Message recorded.')
+  const mockMsg = {
+    ...data,
+    _id: `msg_${Date.now()}`,
+    content: data.content || data.text,
+    senderName: data.senderName || 'Anonymous',
+    createdAt: new Date(),
+  }
+  inMemoryMessages.push(mockMsg)
+
+  ApiResponse.created(res, mockMsg, 'Message recorded.')
 }

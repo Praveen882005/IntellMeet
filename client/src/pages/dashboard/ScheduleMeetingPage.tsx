@@ -41,19 +41,13 @@ export const ScheduleMeetingPage: React.FC = () => {
     e.preventDefault()
     setLoading(true)
 
-    const generatedRoom = `sprint-${Math.random().toString(36).substring(2, 7)}`
-
     try {
-      await meetingService.saveMeeting({
-        roomId: generatedRoom,
-        title,
-        hostName: 'Lead Architect',
-        participants: attendees.split(',').map((e) => e.trim()),
-        summary: `Scheduled meeting: ${title} on ${date} at ${time}.`,
-      })
+      const res = await meetingService.createMeeting({ title })
+      const generatedRoom = res.roomId || `sprint-${Math.random().toString(36).substring(2, 7)}`
       setScheduledRoom(generatedRoom)
     } catch {
-      setScheduledRoom(generatedRoom)
+      const fallbackRoom = `sprint-${Math.random().toString(36).substring(2, 7)}`
+      setScheduledRoom(fallbackRoom)
     } finally {
       setLoading(false)
     }

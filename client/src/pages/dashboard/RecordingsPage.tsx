@@ -14,11 +14,18 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Card } from '../../components/ui/Card'
 import { Modal } from '../../components/ui/Modal'
+import { useQuery } from '@tanstack/react-query'
+import { apiRequest } from '../../services/apiClient'
 
 export const RecordingsPage: React.FC = () => {
   const [playingRecording, setPlayingRecording] = useState<any | null>(null)
 
-  const recordings = [
+  const { data: serverRecordings = [] } = useQuery({
+    queryKey: ['recordings'],
+    queryFn: () => apiRequest<any[]>('/recordings'),
+  })
+
+  const sampleRecordings = [
     {
       id: 'rec_1',
       title: 'Sprint Q4 Architecture Review',
@@ -43,19 +50,24 @@ export const RecordingsPage: React.FC = () => {
       transcriptStatus: 'Transcribed',
       thumbnail: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
     },
-    {
-      id: 'rec_3',
-      title: 'Engineering All-Hands All-Access Session',
-      roomId: 'all-hands-eng',
-      date: 'Oct 24, 2026',
-      duration: '58:40',
-      size: '412 MB',
-      format: 'MP4',
-      status: 'Ready',
-      transcriptStatus: 'Transcribed',
-      thumbnail: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
-    },
   ]
+
+  // Map server recordings into card items
+  const formattedServerRecordings = serverRecordings.map((r) => ({
+    id: r._id || r.id,
+    title: r.title || 'Meeting Recording',
+    roomId: r.meetingId || 'Room',
+    date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Today',
+    duration: `${Math.floor((r.durationSeconds || 0) / 60)}:${((r.durationSeconds || 0) % 60).toString().padStart(2, '0')}`,
+    size: r.fileSize ? `${(r.fileSize / (1024 * 1024)).toFixed(1)} MB` : '12.4 MB',
+    format: (r.format || 'WEBM').toUpperCase(),
+    status: 'Ready',
+    transcriptStatus: 'Transcribed',
+    url: r.url,
+    thumbnail: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
+  }))
+
+  const recordings = [...formattedServerRecordings, ...sampleRecordings]
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">

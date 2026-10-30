@@ -110,9 +110,16 @@ export const OverviewPage: React.FC = () => {
     )
   }
 
-  const handleStartInstant = () => {
-    const randomRoom = `room-${Math.random().toString(36).substring(2, 8)}`
-    navigate(`/room/${randomRoom}`)
+  const handleStartInstant = async () => {
+    try {
+      const res = await meetingService.createMeeting({
+        title: `${user.name}'s Instant Conference`,
+      })
+      navigate(`/room/${res.roomId}`)
+    } catch {
+      const fallbackRoom = `room-${Math.random().toString(36).substring(2, 8)}`
+      navigate(`/room/${fallbackRoom}`)
+    }
   }
 
   const handleCopyLink = (roomId: string) => {

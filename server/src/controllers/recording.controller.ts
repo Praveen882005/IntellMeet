@@ -1,6 +1,8 @@
 import { Request, Response } from 'express'
 import { Recording } from '../models/Recording.model'
 import { ApiResponse } from '../utils/apiResponse'
+import { AppError } from '../utils/appError'
+import { StorageService } from '../services/storage.service'
 import { db } from '../config/db'
 
 export const getRecordings = async (req: Request, res: Response): Promise<void> => {
@@ -33,4 +35,29 @@ export const createRecording = async (req: Request, res: Response): Promise<void
   }
 
   ApiResponse.created(res, { ...data, _id: `rec_${Date.now()}` }, 'Recording logged.')
+}
+
+export const uploadRecordingFile = async (req: Request, res: Response): Promise<void> => {
+  if (!req.file) {
+    throw AppError.badRequest('No recording media file provided.')
+  }
+
+  const { meetingId, title = 'Meeting Recording', durationSeconds = 0 } = req.body
+
+  if (!meetingId) {
+    throw AppError.badRequest('Meeting ID is required for recording persistence.')
+  }
+
+  const format = req.file.mimetype.includes('mp4') ? 'mp4' : 'webm'
+
+  const record = await StorageService.uploadRecording({
+    meetingId,
+    title,
+    durationSeconds: Number(durationSeconds),
+    buffer: req.file.buffer,
+    mimeType: req.file.mimetype || 'video/webm',
+    format,
+  })
+
+  ApiResponse.created(res, record, 'Recording uploaded and persisted to object storage.')
 }

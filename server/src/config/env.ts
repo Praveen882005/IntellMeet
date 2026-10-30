@@ -17,6 +17,19 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional().default(''),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
   RATE_LIMIT_MAX: z.coerce.number().default(200),
+  LIVEKIT_URL: z.string().default('wss://livekit.intellmeet.internal'),
+  LIVEKIT_API_KEY: z.string().default('devkey_intellmeet'),
+  LIVEKIT_API_SECRET: z.string().default('secret_intellmeet_key_abcdef123456'),
+  STUN_SERVERS: z.string().default('stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302'),
+  TURN_SERVERS: z.string().optional().default(''),
+  TURN_USERNAME: z.string().optional().default(''),
+  TURN_CREDENTIAL: z.string().optional().default(''),
+  S3_ENDPOINT: z.string().optional().default(''),
+  S3_REGION: z.string().default('auto'),
+  S3_BUCKET_NAME: z.string().default('intellmeet-recordings'),
+  S3_ACCESS_KEY_ID: z.string().optional().default(''),
+  S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
+  S3_PUBLIC_URL: z.string().default('https://storage.intellmeet.io/recordings'),
 })
 
 const parsedEnv = envSchema.safeParse(process.env)
