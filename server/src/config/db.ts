@@ -51,7 +51,7 @@ class DatabaseConnection {
     this.status = 'connecting'
     logger.info(`🍃 Connecting to MongoDB at ${this.maskUri(env.MONGO_URI)}...`)
 
-    if (env.MONGO_URI.startsWith('mongodb+srv://')) {
+    if (process.platform === 'win32' && env.MONGO_URI.startsWith('mongodb+srv://')) {
       try {
         dns.setServers(['8.8.8.8', '1.1.1.1'])
       } catch {}

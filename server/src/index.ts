@@ -64,16 +64,20 @@ export const createApp = (): { app: Express; server: http.Server } => {
 export const startServer = async (): Promise<http.Server> => {
   const { server } = createApp()
 
-  // Connect to Database
-  await db.connect()
-
-  // Listen on PORT
+  // Listen on PORT immediately so cloud load balancers & health checks pass without delay
   const port = env.PORT || 5000
   server.listen(port, '0.0.0.0', () => {
     logger.info(`🚀 IntellMeet Server running at http://0.0.0.0:${port}`)
     logger.info(`📡 Real-time Socket.io signaling active on port ${port}`)
     logger.info(`🩺 Health check accessible at http://0.0.0.0:${port}/api/v1/health`)
   })
+
+  // Connect to Database
+  try {
+    await db.connect()
+  } catch (err: any) {
+    logger.error('Database connection failed during startup:', { error: err?.message })
+  }
 
   // Graceful shutdown
   const handleShutdown = async (signal: string) => {
