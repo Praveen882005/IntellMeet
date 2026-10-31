@@ -13,6 +13,7 @@ export const Button: React.FC<ButtonProps> = ({
   children,
   variant = 'primary',
   size = 'md',
+  type = 'button',
   icon,
   iconRight,
   loading = false,
@@ -44,6 +45,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
+      type={type}
       className={cn(
         'inline-flex items-center justify-center transition-all duration-150 select-none disabled:opacity-50 disabled:pointer-events-none active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40',
         variantStyles[variant],

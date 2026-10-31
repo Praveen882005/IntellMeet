@@ -16,20 +16,11 @@ export const getMessages = async (req: Request, res: Response): Promise<void> =>
 
   if (meetingId) {
     const filtered = inMemoryMessages.filter((m) => m.meetingId === meetingId)
-    if (filtered.length > 0) {
-      ApiResponse.success(res, filtered, 'Chat messages retrieved.')
-      return
-    }
+    ApiResponse.success(res, filtered, 'Chat messages retrieved.')
+    return
   }
 
-  ApiResponse.success(
-    res,
-    [
-      { senderName: 'Sarah Chen', content: 'Good morning everyone!', isSystem: false, createdAt: new Date() },
-      { senderName: 'IntellMeet Hub', content: 'Recording started.', isSystem: true, createdAt: new Date() },
-    ],
-    'Messages retrieved.'
-  )
+  ApiResponse.success(res, [], 'Messages retrieved.')
 }
 
 export const sendMessage = async (req: Request, res: Response): Promise<void> => {

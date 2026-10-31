@@ -55,7 +55,7 @@ export const RegisterPage: React.FC = () => {
         avatarUrl: response.user.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
         status: 'active',
       })
-      navigate(`/verify-email?email=${encodeURIComponent(email)}`)
+      navigate('/app')
     } catch (err: any) {
       setError(err?.message || 'Registration failed. Please check information.')
     } finally {

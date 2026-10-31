@@ -9,9 +9,8 @@ import { useAuthStore } from './stores/authStore'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 5000,
       retry: 1,
+      refetchOnWindowFocus: false,
     },
   },
 })

@@ -62,6 +62,20 @@ export const registerRoomHandlers = (io: Server, socket: Socket): void => {
     socket.emit('room-users', currentUsers)
   })
 
+  socket.on('update-name', ({ roomId, userName }: { roomId: string; userName: string }) => {
+    const room = activeRooms.get(roomId)
+    if (room && room.has(socket.id)) {
+      const p = room.get(socket.id)!
+      p.userName = userName
+      logger.info(`📝 User in room ${roomId} updated name to: ${userName}`)
+      socket.to(roomId).emit('user-updated', {
+        socketId: socket.id,
+        userId: p.userId,
+        userName,
+      })
+    }
+  })
+
   socket.on('leave-room', ({ roomId }) => {
     handleUserLeave(io, socket, roomId)
   })

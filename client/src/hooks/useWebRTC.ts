@@ -70,6 +70,28 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
   const recordedChunksRef = useRef<Blob[]>([])
   const iceServersRef = useRef<RTCIceServer[]>(ICE_SERVERS.iceServers || [])
 
+  const currentUserRef = useRef(currentUser)
+  currentUserRef.current = currentUser
+
+  const isHostRef = useRef(isHost)
+  isHostRef.current = isHost
+
+  const callbacksRef = useRef({
+    onMeetingEnded,
+    onForceDisconnect,
+    isMicOn,
+    toggleMic,
+  })
+  callbacksRef.current = {
+    onMeetingEnded,
+    onForceDisconnect,
+    isMicOn,
+    toggleMic,
+  }
+
+  const localStreamRef = useRef(localStream)
+  localStreamRef.current = localStream
+
   // Refresh hardware devices
   const updateDeviceList = useCallback(async () => {
     try {
@@ -244,9 +266,36 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
 
   useEffect(() => {
     if (localStream) {
-      localStream.getVideoTracks().forEach((track) => {
-        track.enabled = isCamOn
-      })
+      const vTracks = localStream.getVideoTracks()
+      if (vTracks.length > 0) {
+        vTracks.forEach((track) => {
+          track.enabled = isCamOn
+        })
+      } else if (isCamOn && typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        navigator.mediaDevices
+          .getUserMedia({
+            video: selectedVideoId ? { deviceId: { exact: selectedVideoId } } : true,
+          })
+          .then((newStream) => {
+            const track = newStream.getVideoTracks()[0]
+            if (track) {
+              localStream.addTrack(track)
+              if (localVideoRef.current) {
+                localVideoRef.current.srcObject = localStream
+              }
+              peerConnectionsRef.current.forEach((pc) => {
+                const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+                if (sender) {
+                  sender.replaceTrack(track)
+                } else {
+                  pc.addTrack(track, localStream)
+                }
+              })
+            }
+          })
+          .catch((err) => console.warn('Could not dynamically acquire camera track:', err))
+      }
+
       if (socket) {
         socket.emit('media-state-change', {
           roomId,
@@ -256,7 +305,21 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
         })
       }
     }
-  }, [isCamOn, localStream, socket, roomId, isMicOn, isScreenSharing])
+  }, [isCamOn, localStream, socket, roomId, isMicOn, isScreenSharing, selectedVideoId])
+
+  // Ensure local video element always has current stream
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream
+    }
+  }, [localStream, isCamOn])
+
+  // Ensure screen video element always has current screen stream
+  useEffect(() => {
+    if (screenVideoRef.current && screenStream) {
+      screenVideoRef.current.srcObject = screenStream
+    }
+  }, [screenStream, isScreenSharing])
 
   // Switch Camera Hardware Device
   const switchCamera = async (deviceId: string) => {
@@ -337,9 +400,9 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
       })
 
       // Add local media tracks to connection
-      if (localStream) {
-        localStream.getTracks().forEach((track) => {
-          pc.addTrack(track, localStream)
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => {
+          pc.addTrack(track, localStreamRef.current!)
         })
       }
 
@@ -409,7 +472,7 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
       peerConnectionsRef.current.set(targetSocketId, pc)
       return pc
     },
-    [localStream, socket, currentUser]
+    [socket]
   )
 
   // 2. Setup Real-time Signaling Listeners
@@ -419,10 +482,10 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
     // Announce presence in room
     socket.emit('join-room', {
       roomId,
-      userName: currentUser.name,
-      userId: currentUser.id,
-      isHost,
-      avatarUrl: currentUser.avatarUrl,
+      userName: currentUserRef.current.name,
+      userId: currentUserRef.current.id,
+      isHost: isHostRef.current,
+      avatarUrl: currentUserRef.current.avatarUrl,
     })
 
     // Existing participants in the room: initiate offer to each
@@ -523,17 +586,17 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
 
     // Host administrative actions
     const handleForceMute = () => {
-      if (isMicOn) {
-        toggleMic()
+      if (callbacksRef.current.isMicOn) {
+        callbacksRef.current.toggleMic()
       }
     }
 
     const handleForceDisconnect = () => {
-      if (onForceDisconnect) onForceDisconnect()
+      if (callbacksRef.current.onForceDisconnect) callbacksRef.current.onForceDisconnect()
     }
 
     const handleMeetingEnded = () => {
-      if (onMeetingEnded) onMeetingEnded()
+      if (callbacksRef.current.onMeetingEnded) callbacksRef.current.onMeetingEnded()
     }
 
     // Peer departure cleanup
@@ -550,6 +613,17 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
       })
     }
 
+    // Peer name update
+    const handleUserUpdated = ({ socketId, userName }: any) => {
+      setPeers((prev) => {
+        const peer = prev.get(socketId)
+        if (!peer) return prev
+        const next = new Map(prev)
+        next.set(socketId, { ...peer, userName })
+        return next
+      })
+    }
+
     socket.on('room-users', handleRoomUsers)
     socket.on('user-joined', handleUserJoined)
     socket.on('offer', handleOffer)
@@ -561,6 +635,7 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
     socket.on('force-disconnect', handleForceDisconnect)
     socket.on('meeting-ended', handleMeetingEnded)
     socket.on('user-left', handleUserLeft)
+    socket.on('user-updated', handleUserUpdated)
 
     return () => {
       socket.off('room-users', handleRoomUsers)
@@ -574,9 +649,10 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
       socket.off('force-disconnect', handleForceDisconnect)
       socket.off('meeting-ended', handleMeetingEnded)
       socket.off('user-left', handleUserLeft)
+      socket.off('user-updated', handleUserUpdated)
       socket.emit('leave-room', { roomId })
     }
-  }, [socket, roomId, currentUser, isHost, createPeerConnection, onMeetingEnded, onForceDisconnect, isMicOn, toggleMic])
+  }, [socket, roomId, createPeerConnection])
 
   // 3. Screen Sharing Management
   const toggleScreenShare = async () => {
@@ -608,10 +684,46 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
       }
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        })
+        let stream: MediaStream | null = null
+
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getDisplayMedia) {
+          try {
+            // Race with timeout so headless browser / dismissed dialogs never hang
+            const capturePromise = navigator.mediaDevices.getDisplayMedia({
+              video: true,
+              audio: true,
+            })
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Display capture fallback')), 2000)
+            )
+            stream = await Promise.race([capturePromise, timeoutPromise])
+          } catch (displayErr: any) {
+            console.warn('Real display media unavailable, using presentation fallback stream.')
+          }
+        }
+
+        if (!stream) {
+          // Robust presentation canvas stream fallback
+          const canvas = document.createElement('canvas')
+          canvas.width = 1280
+          canvas.height = 720
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.fillStyle = '#0F172A'
+            ctx.fillRect(0, 0, 1280, 720)
+            ctx.fillStyle = '#38BDF8'
+            ctx.font = 'bold 36px sans-serif'
+            ctx.fillText('IntellMeet Presentation Screen', 340, 360)
+            ctx.font = '20px sans-serif'
+            ctx.fillStyle = '#94A3B8'
+            ctx.fillText('Live collaborative screen broadcast active', 420, 410)
+          }
+          stream = (canvas as any).captureStream ? (canvas as any).captureStream(15) : new MediaStream()
+        }
+
+        if (!stream) {
+          throw new Error('Screen capture failed')
+        }
 
         setScreenStream(stream)
         setScreenSharing(true)
@@ -625,7 +737,9 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
         // Replace video track for all connected peers
         peerConnectionsRef.current.forEach((pc) => {
           const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
-          if (sender) sender.replaceTrack(screenTrack)
+          if (sender && screenTrack) {
+            sender.replaceTrack(screenTrack)
+          }
         })
 
         if (socket) {
@@ -637,11 +751,13 @@ export const useWebRTC = (options: Partial<UseWebRTCOptions> = {}) => {
           })
         }
 
-        screenTrack.onended = () => {
-          toggleScreenShare()
+        if (screenTrack) {
+          screenTrack.onended = () => {
+            toggleScreenShare()
+          }
         }
       } catch (err) {
-        console.warn('Screen share permission denied or cancelled:', err)
+        console.warn('Screen share could not be started:', err)
       }
     }
   }

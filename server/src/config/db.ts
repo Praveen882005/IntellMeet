@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import dns from 'dns'
 import { env } from './env'
 import { logger } from '../utils/logger'
 
@@ -49,6 +50,12 @@ class DatabaseConnection {
   public async connect(): Promise<void> {
     this.status = 'connecting'
     logger.info(`🍃 Connecting to MongoDB at ${this.maskUri(env.MONGO_URI)}...`)
+
+    if (env.MONGO_URI.startsWith('mongodb+srv://')) {
+      try {
+        dns.setServers(['8.8.8.8', '1.1.1.1'])
+      } catch {}
+    }
 
     try {
       await mongoose.connect(env.MONGO_URI, {

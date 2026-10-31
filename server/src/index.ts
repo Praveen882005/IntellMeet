@@ -69,10 +69,10 @@ export const startServer = async (): Promise<http.Server> => {
 
   // Listen on PORT
   const port = env.PORT || 5000
-  server.listen(port, () => {
-    logger.info(`🚀 IntellMeet Server running at http://localhost:${port}`)
+  server.listen(port, '0.0.0.0', () => {
+    logger.info(`🚀 IntellMeet Server running at http://0.0.0.0:${port}`)
     logger.info(`📡 Real-time Socket.io signaling active on port ${port}`)
-    logger.info(`🩺 Health check accessible at http://localhost:${port}/api/v1/health`)
+    logger.info(`🩺 Health check accessible at http://0.0.0.0:${port}/api/v1/health`)
   })
 
   // Graceful shutdown
@@ -92,7 +92,11 @@ export const startServer = async (): Promise<http.Server> => {
 }
 
 // Start when executed directly
-if (require.main === module) {
+const isDirectExecution =
+  Boolean(typeof require !== 'undefined' && require.main === module) ||
+  Boolean(process.argv[1] && /[/\\](?:src[/\\])?index\.(ts|js)$/.test(process.argv[1]))
+
+if (isDirectExecution) {
   startServer().catch((err) => {
     logger.error('Fatal error during server startup:', { error: err.message })
     process.exit(1)

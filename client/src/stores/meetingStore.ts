@@ -55,7 +55,13 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setScreenSharing: (isScreenSharing) => set({ isScreenSharing }),
   toggleTranscribing: () => set((state) => ({ isTranscribing: !state.isTranscribing })),
   setActiveSideTab: (activeSideTab) => set({ activeSideTab }),
-  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+  addMessage: (msg) =>
+    set((state) => {
+      if (state.messages.some((m) => m.id === msg.id)) {
+        return state
+      }
+      return { messages: [...state.messages, msg] }
+    }),
   addTranscript: (entry) => set((state) => ({ transcripts: [...state.transcripts, entry] })),
   setLiveSubtitle: (liveSubtitle, liveSubtitleSpeaker) =>
     set({ liveSubtitle, liveSubtitleSpeaker }),

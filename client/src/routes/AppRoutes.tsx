@@ -46,7 +46,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/verify-email" element={<Navigate to="/app" replace />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
 
         {/* 3. Real-Time Dark Meeting Room */}

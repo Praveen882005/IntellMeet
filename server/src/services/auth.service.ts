@@ -68,7 +68,7 @@ export class AuthService {
           role: data.role || 'member',
           verificationCode,
           verificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-          isEmailVerified: false,
+          isEmailVerified: true,
           status: 'active',
         })
 
@@ -123,7 +123,7 @@ export class AuthService {
         role: data.role || 'member',
         organizationId: mockOrgId,
         workspaceId: mockWsId,
-        isEmailVerified: false,
+        isEmailVerified: true,
         verificationCode,
         status: 'active',
         preferences: {

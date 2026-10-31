@@ -164,6 +164,49 @@ export const LoginPage: React.FC = () => {
             </Button>
           </form>
 
+          {/* 1-Click Demo Profiles */}
+          <div className="pt-2 border-t border-[#EAECF0] space-y-2">
+            <div className="text-[10px] font-semibold text-[#667085] uppercase tracking-wider">
+              Quick 1-Click Demo Profiles (Distinct Names)
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setUser({
+                    id: 'usr_sarah',
+                    name: 'Sarah Chen',
+                    email: 'sarah@intellmeet.io',
+                    role: 'org_admin',
+                    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&h=120&q=80',
+                  })
+                  navigate('/app')
+                }}
+                className="p-2 text-left rounded-lg border border-[#EAECF0] hover:border-[#2563EB] hover:bg-[#EFF8FF] transition-all text-xs"
+              >
+                <div className="font-semibold text-[#101828]">Sarah Chen</div>
+                <div className="text-[10px] text-[#667085]">Host / Admin</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUser({
+                    id: 'usr_alex',
+                    name: 'Alex Rivera',
+                    email: 'alex@intellmeet.io',
+                    role: 'member',
+                    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80',
+                  })
+                  navigate('/app')
+                }}
+                className="p-2 text-left rounded-lg border border-[#EAECF0] hover:border-[#2563EB] hover:bg-[#EFF8FF] transition-all text-xs"
+              >
+                <div className="font-semibold text-[#101828]">Alex Rivera</div>
+                <div className="text-[10px] text-[#667085]">Sprint Lead</div>
+              </button>
+            </div>
+          </div>
+
           <div className="pt-2 border-t border-[#EAECF0] text-center text-xs text-[#667085]">
             Don't have an enterprise workspace?{' '}
             <Link to="/register" className="font-semibold text-[#2563EB] hover:text-[#1D4ED8]">

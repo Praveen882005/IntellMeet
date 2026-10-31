@@ -28,15 +28,42 @@ interface AuthState {
   logout: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  user: {
-    id: DEFAULT_USER.id,
-    name: DEFAULT_USER.name,
-    email: DEFAULT_USER.email,
-    role: DEFAULT_USER.role,
-    avatarUrl: DEFAULT_USER.avatarUrl,
+function getInitialUser(): UserProfile {
+  try {
+    const cached = localStorage.getItem('user_profile')
+    if (cached) {
+      return JSON.parse(cached)
+    }
+  } catch {}
+
+  // Unique session identity for guest tabs so multiple tabs never have the exact same name
+  let guestId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('guest_id') : null
+  let guestName = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('guest_name') : null
+
+  if (!guestId || !guestName) {
+    const randomNum = Math.floor(1000 + Math.random() * 9000)
+    guestId = `guest_${Date.now().toString().slice(-4)}_${randomNum}`
+    guestName = `Guest ${randomNum}`
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('guest_id', guestId)
+        sessionStorage.setItem('guest_name', guestName)
+      }
+    } catch {}
+  }
+
+  return {
+    id: guestId,
+    name: guestName,
+    email: `${guestId}@guest.intellmeet.io`,
+    role: 'guest',
+    avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(guestName)}`,
     status: 'active',
-  },
+  }
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: getInitialUser(),
   accessToken: localStorage.getItem('access_token'),
   isAuthenticated: Boolean(localStorage.getItem('access_token')),
   isLoading: false,
@@ -46,13 +73,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setWorkspaceName: (workspaceName: string) => set({ workspaceName }),
 
   setUserName: (name: string) =>
-    set((state) => ({ user: { ...state.user, name } })),
+    set((state) => {
+      const updated = { ...state.user, name }
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('guest_name', name)
+        }
+        if (state.isAuthenticated) {
+          localStorage.setItem('user_profile', JSON.stringify(updated))
+        }
+      } catch {}
+      return { user: updated }
+    }),
 
   setUser: (updatedUser: Partial<UserProfile>) =>
-    set((state) => ({
-      user: { ...state.user, ...updatedUser },
-      isAuthenticated: true,
-    })),
+    set((state) => {
+      const newUser = { ...state.user, ...updatedUser }
+      try {
+        localStorage.setItem('user_profile', JSON.stringify(newUser))
+      } catch {}
+      return {
+        user: newUser,
+        isAuthenticated: true,
+      }
+    }),
 
   setAccessToken: (token: string | null) => {
     if (token) {
@@ -60,6 +104,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ accessToken: token, isAuthenticated: true })
     } else {
       localStorage.removeItem('access_token')
+      localStorage.removeItem('user_profile')
       set({ accessToken: null, isAuthenticated: false })
     }
   },

@@ -12,7 +12,15 @@ let io: Server | null = null
 export const initSocketServer = (httpServer: HttpServer): Server => {
   io = new Server(httpServer, {
     cors: {
-      origin: env.isDev ? '*' : env.corsOrigins,
+      origin: (origin, callback) => {
+        // Allow mobile apps, curl, server-to-server or empty origin
+        if (!origin) return callback(null, true)
+        if (env.isDev || env.corsOrigins.includes('*') || env.corsOrigins.includes(origin)) {
+          return callback(null, true)
+        }
+        logger.warn(`Socket connection origin blocked by CORS: ${origin}`)
+        return callback(new Error(`CORS blocked for socket origin: ${origin}`), false)
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },

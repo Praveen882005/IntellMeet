@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Mic,
   MicOff,
@@ -12,6 +12,7 @@ import {
   PhoneOff,
   Send,
   Users,
+  User,
   Copy,
   CheckCircle2,
   Check,
@@ -28,6 +29,7 @@ import {
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
+import { Input } from '../../components/ui/Input'
 import { useSocket } from '../../hooks/useSocket'
 import { useWebRTC, RemotePeer } from '../../hooks/useWebRTC'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
@@ -153,7 +155,7 @@ export const MeetingRoomPage: React.FC = () => {
   const { roomId = 'sprint-room' } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()
-  const user = useAuthStore((s) => s.user)
+  const { user, setUserName, isAuthenticated } = useAuthStore()
   const { success, info, error: toastError } = useToast()
 
   // Store state
@@ -188,10 +190,28 @@ export const MeetingRoomPage: React.FC = () => {
   const [meetingSeconds, setMeetingSeconds] = useState(0)
   const [leaveModalOpen, setLeaveModalOpen] = useState(false)
   const [deviceModalOpen, setDeviceModalOpen] = useState(false)
+  const [editNameOpen, setEditNameOpen] = useState(false)
+  const [newName, setNewName] = useState(user.name)
   const [isHost, setIsHost] = useState(false)
   const [transcriptSearch, setTranscriptSearch] = useState('')
 
   const chatEndRef = useRef<HTMLDivElement | null>(null)
+
+  const memoizedCurrentUser = React.useMemo(() => ({
+    id: user.id || 'usr_anonymous',
+    name: user.name || 'Anonymous',
+    avatarUrl: user.avatarUrl,
+  }), [user.id, user.name, user.avatarUrl])
+
+  const handleMeetingEndedCallback = React.useCallback(() => {
+    alert('The meeting has been concluded by the host.')
+    navigate('/app')
+  }, [navigate])
+
+  const handleForceDisconnectCallback = React.useCallback(() => {
+    alert('You have been removed from the meeting by the host.')
+    navigate('/app')
+  }, [navigate])
 
   // WebRTC Hook
   const {
@@ -219,20 +239,10 @@ export const MeetingRoomPage: React.FC = () => {
   } = useWebRTC({
     roomId,
     socket,
-    currentUser: {
-      id: user.id || 'usr_anonymous',
-      name: user.name || 'Anonymous',
-      avatarUrl: user.avatarUrl,
-    },
+    currentUser: memoizedCurrentUser,
     isHost,
-    onMeetingEnded: () => {
-      alert('The meeting has been concluded by the host.')
-      navigate('/app')
-    },
-    onForceDisconnect: () => {
-      alert('You have been removed from the meeting by the host.')
-      navigate('/app')
-    },
+    onMeetingEnded: handleMeetingEndedCallback,
+    onForceDisconnect: handleForceDisconnectCallback,
   })
 
   // Speech Recognition Subtitles
@@ -257,12 +267,15 @@ export const MeetingRoomPage: React.FC = () => {
       .getMeetingMessages(roomId)
       .then((history) => {
         if (Array.isArray(history) && history.length > 0) {
-          history.forEach((msg) => {
+          history.forEach((msg, idx) => {
+            const msgId = msg._id || msg.id || `hist_${idx}_${msg.senderName || msg.sender}`
             addMessage({
-              id: msg._id || msg.id,
-              sender: msg.senderName,
-              text: msg.content,
-              timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              id: msgId,
+              sender: msg.senderName || msg.sender || 'Participant',
+              text: msg.content || msg.text || '',
+              timestamp: msg.createdAt
+                ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '',
             })
           })
         }
@@ -271,7 +284,7 @@ export const MeetingRoomPage: React.FC = () => {
 
     // Initialize local hardware media tracks
     initMedia()
-  }, [roomId, setRoomId, initMedia, addMessage])
+  }, [roomId])
 
   // Meeting duration timer
   useEffect(() => {
@@ -299,9 +312,12 @@ export const MeetingRoomPage: React.FC = () => {
       addMessage(msg)
     }
 
-    const handleUserJoined = (data: { userName: string }) => {
+    const handleUserJoined = (data: { socketId?: string; userId?: string; userName: string }) => {
+      // Never show user-joined for current user
+      if (!data.userName || data.userName === user.name || data.userId === user.id) return
+
       addMessage({
-        id: `sys_${Date.now()}`,
+        id: `sys_join_${data.userId || data.socketId || data.userName}`,
         sender: 'IntellMeet Hub',
         text: `${data.userName} joined the meeting.`,
         isSystem: true,
@@ -309,9 +325,12 @@ export const MeetingRoomPage: React.FC = () => {
       })
     }
 
-    const handleUserLeft = (data: { userName: string }) => {
+    const handleUserLeft = (data: { socketId?: string; userId?: string; userName: string }) => {
+      // Never show user-left for current user
+      if (!data.userName || data.userName === user.name || data.userId === user.id) return
+
       addMessage({
-        id: `sys_${Date.now()}`,
+        id: `sys_leave_${data.userId || data.socketId || data.userName}_${Date.now()}`,
         sender: 'IntellMeet Hub',
         text: `${data.userName || 'A participant'} left the meeting.`,
         isSystem: true,
@@ -328,7 +347,7 @@ export const MeetingRoomPage: React.FC = () => {
       socket.off('user-joined', handleUserJoined)
       socket.off('user-left', handleUserLeft)
     }
-  }, [socket, addMessage])
+  }, [socket, user.name, user.id, addMessage])
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -422,13 +441,19 @@ export const MeetingRoomPage: React.FC = () => {
   }
 
   // Leave / End Meeting
-  const handleConfirmLeave = async (endForAll = false) => {
+  const handleConfirmLeave = (endForAll = false) => {
     try {
+      if (localStream) {
+        localStream.getTracks().forEach((t) => t.stop())
+      }
+      if (screenStream) {
+        screenStream.getTracks().forEach((t) => t.stop())
+      }
       if (endForAll && isHost) {
         endMeetingForAll()
         info('Meeting ended for all participants')
       } else {
-        await meetingService.saveMeeting({
+        meetingService.saveMeeting({
           roomId,
           title: `Session: ${roomId}`,
           hostName: user.name,
@@ -436,11 +461,11 @@ export const MeetingRoomPage: React.FC = () => {
           summary: aiSummary || 'Session concluded with live peer streaming.',
           keyDecisions,
           actionItems,
-        })
+        }).catch(() => {})
         info('Left meeting room')
       }
     } catch (err: unknown) {
-      console.warn('Error saving meeting report on leave:', err)
+      console.warn('Error on leaving meeting:', err)
     } finally {
       resetMeetingState()
       navigate('/app')
@@ -485,6 +510,33 @@ export const MeetingRoomPage: React.FC = () => {
 
         {/* Right Header Actions */}
         <div className="flex items-center gap-2">
+          {/* Participant Identity badge with instant Name Editor */}
+          <button
+            type="button"
+            onClick={() => {
+              setNewName(user.name)
+              setEditNameOpen(true)
+            }}
+            title="Click to edit your display name"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 transition-colors"
+          >
+            <User className="w-3.5 h-3.5 text-[#60A5FA]" />
+            <span className="font-medium max-w-[120px] truncate">{user.name}</span>
+            <span className="text-[10px] text-slate-400 font-mono">(Edit)</span>
+          </button>
+
+          {!isAuthenticated && (
+            <Link to="/login">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs bg-[#2563EB]/20 border-[#2563EB]/40 text-[#60A5FA] hover:bg-[#2563EB]/30"
+              >
+                Sign in
+              </Button>
+            </Link>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -562,7 +614,10 @@ export const MeetingRoomPage: React.FC = () => {
               {/* Participant camera strip below shared screen */}
               <div className="h-32 flex gap-3 overflow-x-auto shrink-0 pb-1">
                 {/* Local user tile */}
-                <div className="w-48 h-full rounded-xl bg-[#111827] border border-white/10 relative overflow-hidden shrink-0">
+                <div
+                  key="strip-local-tile"
+                  className="w-48 h-full rounded-xl bg-[#111827] border border-white/10 relative overflow-hidden shrink-0"
+                >
                   {isCamOn ? (
                     <video
                       ref={localVideoRef}
@@ -613,21 +668,22 @@ export const MeetingRoomPage: React.FC = () => {
             >
               {/* 1. Local User Video Tile */}
               <div
+                key="local-user-tile"
                 className={`rounded-2xl bg-[#111827] relative overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 ${
                   isLocalSpeaking
                     ? 'border-2 border-[#12B76A] ring-4 ring-[#12B76A]/20'
                     : 'border border-white/10'
                 }`}
               >
-                {isCamOn ? (
-                  <video
-                    ref={localVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover scale-x-[-1]"
-                  />
-                ) : (
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover scale-x-[-1] ${isCamOn ? 'block' : 'hidden'}`}
+                />
+
+                {!isCamOn && (
                   <div className="flex flex-col items-center gap-3 text-slate-400 p-4">
                     {user.avatarUrl ? (
                       <img
@@ -689,7 +745,7 @@ export const MeetingRoomPage: React.FC = () => {
 
               {/* Empty State: Waiting for attendees */}
               {peers.length === 0 && (
-                <div className="hidden sm:flex rounded-2xl bg-[#111827]/40 border border-dashed border-white/10 flex-col items-center justify-center text-center p-6 space-y-3">
+                <div key="empty-waiting-attendees" className="hidden sm:flex rounded-2xl bg-[#111827]/40 border border-dashed border-white/10 flex-col items-center justify-center text-center p-6 space-y-3">
                   <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400">
                     <Users className="w-6 h-6 text-[#60A5FA]" />
                   </div>
@@ -960,6 +1016,7 @@ export const MeetingRoomPage: React.FC = () => {
         <div className="flex items-center gap-2">
           {/* Microphone toggle */}
           <button
+            type="button"
             onClick={toggleMic}
             className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
               isMicOn
@@ -972,6 +1029,7 @@ export const MeetingRoomPage: React.FC = () => {
 
           {/* Camera toggle */}
           <button
+            type="button"
             onClick={toggleCam}
             className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
               isCamOn
@@ -984,6 +1042,7 @@ export const MeetingRoomPage: React.FC = () => {
 
           {/* Screen Share toggle */}
           <button
+            type="button"
             onClick={toggleScreenShare}
             className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
               isScreenSharing
@@ -996,6 +1055,7 @@ export const MeetingRoomPage: React.FC = () => {
 
           {/* Recording toggle */}
           <button
+            type="button"
             onClick={handleToggleRecording}
             className={`p-3 rounded-2xl flex items-center justify-center transition-all ${
               isRecording
@@ -1010,6 +1070,7 @@ export const MeetingRoomPage: React.FC = () => {
         {/* Center: Live Subtitles Caption Toggle */}
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={toggleTranscribing}
             className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all ${
               isTranscribing
@@ -1028,7 +1089,13 @@ export const MeetingRoomPage: React.FC = () => {
             variant="danger"
             size="md"
             icon={<PhoneOff className="w-4 h-4" />}
-            onClick={() => setLeaveModalOpen(true)}
+            onClick={() => {
+              if (isHost) {
+                setLeaveModalOpen(true)
+              } else {
+                handleConfirmLeave(false)
+              }
+            }}
             className="rounded-xl px-5 bg-[#F04438] hover:bg-[#D92D20] text-white font-semibold shadow-lg shadow-[#F04438]/20"
           >
             Leave
@@ -1130,6 +1197,48 @@ export const MeetingRoomPage: React.FC = () => {
                 End Meeting for All
               </Button>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Display Name Modal */}
+      <Modal
+        isOpen={editNameOpen}
+        onClose={() => setEditNameOpen(false)}
+        title="Edit Display Name"
+        description="Choose how you appear to other participants in this meeting room."
+      >
+        <div className="space-y-4 pt-2">
+          <Input
+            label="Your Display Name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. Alex Rivera, Sarah Chen"
+          />
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setEditNameOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                if (newName.trim()) {
+                  const trimmed = newName.trim()
+                  setUserName(trimmed)
+                  socket?.emit('update-name', { roomId, userName: trimmed })
+                  success(`Name updated to "${trimmed}"`)
+                }
+                setEditNameOpen(false)
+              }}
+            >
+              Save Name
+            </Button>
           </div>
         </div>
       </Modal>
