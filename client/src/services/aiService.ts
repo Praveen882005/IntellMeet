@@ -57,12 +57,26 @@ export const aiService = {
     summary: StructuredAiSummary
     actionItems: ExtractedActionItem[]
   }> {
+    const normalizedPayload = {
+      roomName: params.roomName,
+      asyncMode: params.asyncMode,
+      transcript: (params.transcript || []).map((t: any) => ({
+        speaker: t.speaker || t.sender || 'Speaker',
+        text: t.text || '',
+        timestamp: t.timestamp,
+      })),
+      messages: (params.messages || []).map((m: any) => ({
+        speaker: m.sender || m.speaker || 'Participant',
+        text: m.text || '',
+        timestamp: m.timestamp,
+      })),
+    }
     return apiRequest<{
       summary: StructuredAiSummary
       actionItems: ExtractedActionItem[]
     }>('/ai/summarize', {
       method: 'POST',
-      body: JSON.stringify(params),
+      body: JSON.stringify(normalizedPayload),
     })
   },
 

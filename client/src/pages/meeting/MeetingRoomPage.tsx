@@ -177,6 +177,8 @@ export const MeetingRoomPage: React.FC = () => {
     toggleTranscribing,
     setActiveSideTab,
     addMessage,
+    addTranscript,
+    setLiveSubtitle,
     setActionItems,
     toggleActionItem,
     resetMeetingState,
@@ -282,7 +284,7 @@ export const MeetingRoomPage: React.FC = () => {
   })
 
   // Speech Recognition Subtitles
-  useSpeechRecognition(roomId)
+  const { isSupported: isSpeechSupported, speechError, simulateSpeech } = useSpeechRecognition(roomId)
 
   // Validate Meeting Room & Host Status
   useEffect(() => {
@@ -374,16 +376,30 @@ export const MeetingRoomPage: React.FC = () => {
       })
     }
 
+    const handleReceiveTranscript = (data: { speaker?: string; text?: string }) => {
+      if (data?.text) {
+        const speakerName = data.speaker || 'Speaker'
+        setLiveSubtitle(data.text, speakerName)
+        addTranscript({
+          speaker: speakerName,
+          text: data.text,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        })
+      }
+    }
+
     socket.on('receive-message', handleReceiveMessage)
     socket.on('user-joined', handleUserJoined)
     socket.on('user-left', handleUserLeft)
+    socket.on('receive-transcript', handleReceiveTranscript)
 
     return () => {
       socket.off('receive-message', handleReceiveMessage)
       socket.off('user-joined', handleUserJoined)
       socket.off('user-left', handleUserLeft)
+      socket.off('receive-transcript', handleReceiveTranscript)
     }
-  }, [socket, user.name, user.id, addMessage])
+  }, [socket, user.name, user.id, addMessage, setLiveSubtitle, addTranscript])
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -504,7 +520,15 @@ export const MeetingRoomPage: React.FC = () => {
       console.warn('Error on leaving meeting:', err)
     } finally {
       resetMeetingState()
-      navigate('/app')
+      const hasToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('access_token'))
+      const isAuthUser = (isAuthenticated || hasToken) && user.role !== 'guest'
+
+      if (isAuthUser) {
+        navigate('/app')
+      } else {
+        info('You have left the meeting')
+        navigate('/')
+      }
     }
   }
 
@@ -1005,6 +1029,48 @@ export const MeetingRoomPage: React.FC = () => {
           {/* Drawer Body: 3. AI Minutes & Highlights */}
           {activeSideTab === 'ai' && (
             <div className="flex-1 p-3 overflow-y-auto space-y-4 text-xs">
+              {/* Action Trigger Buttons inside AI drawer */}
+              <div className="flex gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Sparkles className="w-3.5 h-3.5" />}
+                  onClick={handleGenerateSummary}
+                  disabled={isGeneratingAi}
+                  className="flex-1 justify-center bg-[#2563EB] hover:bg-[#1D4ED8] text-white"
+                >
+                  {isGeneratingAi ? 'Analyzing...' : 'Generate AI Minutes'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    simulateSpeech(
+                      'Team agreed to complete the release verification and sign off before sprint end.',
+                      user.name
+                    )
+                    info('Simulated spoken sentence for subtitle and live transcript.')
+                  }}
+                  title="Simulate speech to test real-time subtitles and transcripts"
+                  className="text-xs bg-white/5 border-white/10 text-slate-300 hover:text-white"
+                >
+                  Voice Test
+                </Button>
+              </div>
+
+              {/* Browser Speech Service Notice if blocked by browser policy */}
+              {speechError && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px] space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5 text-amber-300">
+                    <Info className="w-3.5 h-3.5" />
+                    <span>Speech Recognition Notice</span>
+                  </div>
+                  <p className="text-[10px] leading-relaxed text-amber-200/90">
+                    Browser speech API is restricted ({speechError}). In Brave, toggle "Use Google services for speech recognition" in Settings, or use the <strong>Voice Test</strong> button above to verify subtitles & AI minutes.
+                  </p>
+                </div>
+              )}
+
               {/* Executive Summary */}
               <div className="space-y-1.5">
                 <div className="font-heading text-xs font-semibold text-slate-200 flex items-center gap-1.5">
@@ -1012,9 +1078,26 @@ export const MeetingRoomPage: React.FC = () => {
                   <span>Executive Minutes</span>
                 </div>
                 <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 leading-relaxed text-[11px]">
-                  {aiSummary || 'AI Minutes will automatically crystallize discussions and key takeaways once the meeting progresses.'}
+                  {aiSummary || 'AI Minutes will automatically crystallize discussions and key takeaways once the meeting progresses. Click "Generate AI Minutes" above to analyze now.'}
                 </div>
               </div>
+
+              {/* Key Decisions */}
+              {keyDecisions.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="font-heading text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#12B76A]" />
+                    <span>Key Decisions ({keyDecisions.length})</span>
+                  </div>
+                  <div className="space-y-1">
+                    {keyDecisions.map((decision, idx) => (
+                      <div key={idx} className="p-2 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-300">
+                        • {decision}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Action Items */}
               <div className="space-y-2">
@@ -1024,7 +1107,7 @@ export const MeetingRoomPage: React.FC = () => {
                 </div>
                 {actionItems.length === 0 ? (
                   <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-slate-500 text-[11px]">
-                    No action items detected yet.
+                    No action items detected yet. Speak or type in chat to extract tasks.
                   </div>
                 ) : (
                   actionItems.map((item) => (

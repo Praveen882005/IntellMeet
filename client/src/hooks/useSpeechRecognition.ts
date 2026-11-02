@@ -13,7 +13,9 @@ declare global {
 
 export const useSpeechRecognition = (roomId: string) => {
   const recognitionRef = useRef<any>(null)
+  const subtitleTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [isSupported, setIsSupported] = useState(true)
+  const [speechError, setSpeechError] = useState<string | null>(null)
   const isTranscribing = useMeetingStore((s) => s.isTranscribing)
   const isMicOn = useMeetingStore((s) => s.isMicOn)
   const setLiveSubtitle = useMeetingStore((s) => s.setLiveSubtitle)
@@ -21,12 +23,49 @@ export const useSpeechRecognition = (roomId: string) => {
   const userName = useAuthStore((s) => s.user.name)
   const { socket } = useSocket()
 
+  const clearSubtitleAfterDelay = useCallback((delayMs = 4000) => {
+    if (subtitleTimerRef.current) {
+      clearTimeout(subtitleTimerRef.current)
+    }
+    subtitleTimerRef.current = setTimeout(() => {
+      setLiveSubtitle('', '')
+    }, delayMs)
+  }, [setLiveSubtitle])
+
+  // Allows programmatic or fallback simulation of spoken voice for runtime verification
+  const simulateSpeech = useCallback(
+    (text: string, speakerName?: string) => {
+      const speaker = speakerName || userName || 'Speaker'
+      setLiveSubtitle(text, speaker)
+      clearSubtitleAfterDelay(4500)
+
+      const entry = {
+        speaker,
+        text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }
+      addTranscript(entry)
+
+      if (socket && roomId) {
+        socket.emit('transcript-chunk', {
+          roomId,
+          transcriptData: {
+            speaker,
+            text,
+          },
+        })
+      }
+    },
+    [userName, setLiveSubtitle, clearSubtitleAfterDelay, addTranscript, socket, roomId]
+  )
+
   const startRecognition = useCallback(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition
 
     if (!SpeechRecognition) {
       setIsSupported(false)
+      setSpeechError('SpeechRecognition API not available in this browser environment.')
       return
     }
 
@@ -56,9 +95,10 @@ export const useSpeechRecognition = (roomId: string) => {
           }
         }
 
-        const displayText = interimText || finalText
-        if (displayText.trim()) {
+        const displayText = (interimText || finalText).trim()
+        if (displayText) {
           setLiveSubtitle(displayText, userName)
+          clearSubtitleAfterDelay(3500)
 
           // Broadcast live subtitle chunk via Socket.io
           if (socket && roomId) {
@@ -82,8 +122,14 @@ export const useSpeechRecognition = (roomId: string) => {
         }
       }
 
-      recognition.onerror = () => {
-        // Gracefully ignore speech recognition hardware errors or silence timeouts
+      recognition.onerror = (event: any) => {
+        const err = event?.error || 'speech-recognition-error'
+        if (err === 'service-not-allowed' || err === 'not-allowed') {
+          console.warn('[useSpeechRecognition] Permission or service blocked by browser:', err)
+          setSpeechError(err)
+          setIsSupported(false)
+        }
+        // Silence timeouts ('no-speech') will naturally restart on 'onend'
       }
 
       recognition.onend = () => {
@@ -99,10 +145,13 @@ export const useSpeechRecognition = (roomId: string) => {
 
       recognition.start()
       recognitionRef.current = recognition
-    } catch {
-      // Speech recognition initialization fallback
+      setSpeechError(null)
+      setIsSupported(true)
+    } catch (err: any) {
+      console.warn('[useSpeechRecognition] Start failed:', err?.message || err)
+      setSpeechError(err?.message || 'Failed to initialize speech engine')
     }
-  }, [roomId, userName, isTranscribing, isMicOn, socket, setLiveSubtitle, addTranscript])
+  }, [roomId, userName, isTranscribing, isMicOn, socket, setLiveSubtitle, clearSubtitleAfterDelay, addTranscript])
 
   const stopRecognition = useCallback(() => {
     if (recognitionRef.current) {
@@ -112,6 +161,9 @@ export const useSpeechRecognition = (roomId: string) => {
       } catch {
         // Ignore
       }
+    }
+    if (subtitleTimerRef.current) {
+      clearTimeout(subtitleTimerRef.current)
     }
     setLiveSubtitle('', '')
   }, [setLiveSubtitle])
@@ -128,5 +180,5 @@ export const useSpeechRecognition = (roomId: string) => {
     }
   }, [isTranscribing, isMicOn, roomId, startRecognition, stopRecognition])
 
-  return { isSupported }
+  return { isSupported, speechError, simulateSpeech }
 }

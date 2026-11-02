@@ -92,7 +92,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         localStorage.setItem('user_profile', JSON.stringify(newUser))
       } catch {}
-      const token = localStorage.getItem('access_token') || state.accessToken
+      let token = localStorage.getItem('access_token') || state.accessToken
+      if (!token) {
+        token = `mock_token_${Date.now()}_${newUser.id || 'usr'}`
+        try {
+          localStorage.setItem('access_token', token)
+        } catch {}
+      }
       return {
         user: newUser,
         accessToken: token,
@@ -133,10 +139,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isAuthenticated: true,
         })
       }
-    } catch {
-      // If token expired and refresh fails, reset auth state
-      localStorage.removeItem('access_token')
-      set({ accessToken: null, isAuthenticated: false })
+    } catch (err: any) {
+      // ONLY clear token if it is explicitly an HTTP 401 Unauthorized (expired or revoked token)
+      // Never clear session on network failures or while backend is spinning up on Render/Railway
+      if (err?.status === 401) {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('user_profile')
+        set({ accessToken: null, isAuthenticated: false })
+      } else {
+        console.warn('Backend waking up or offline, preserving active session:', err?.message || err)
+      }
     } finally {
       set({ isLoading: false })
     }

@@ -43,10 +43,14 @@ export class AiService {
     actionItems: ExtractedActionItem[]
   }> {
     const combinedSegments: DialogueSegment[] = [
-      ...transcript,
-      ...messages.map((m) => ({
-        speaker: m.speaker,
-        text: m.text,
+      ...transcript.map((t: any) => ({
+        speaker: t.speaker || t.sender || 'Participant',
+        text: t.text || '',
+        timestamp: t.timestamp,
+      })),
+      ...messages.map((m: any) => ({
+        speaker: m.speaker || m.sender || 'Participant',
+        text: m.text || '',
         timestamp: m.timestamp,
       })),
     ]
