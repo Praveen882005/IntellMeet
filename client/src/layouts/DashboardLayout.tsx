@@ -36,8 +36,17 @@ import { notificationService, NotificationDto } from '../services/notificationSe
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, workspaceName, organizationName, logout } = useAuthStore()
+  const { user, workspaceName, organizationName, logout, isAuthenticated } = useAuthStore()
   const { socket, isConnected } = useSocket()
+
+  // Redirect unauthenticated users to /login preserving destination
+  useEffect(() => {
+    const hasToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('access_token'))
+    if (!isAuthenticated && !hasToken) {
+      const target = location.pathname + location.search
+      navigate(`/login?redirect=${encodeURIComponent(target)}`, { replace: true })
+    }
+  }, [isAuthenticated, location.pathname, location.search, navigate])
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [joinModalOpen, setJoinModalOpen] = useState(false)

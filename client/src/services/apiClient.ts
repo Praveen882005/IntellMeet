@@ -26,25 +26,28 @@ function onRefreshed(token: string) {
 
 export function buildApiUrl(endpoint: string): string {
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
-  // If API_BASE_URL is relative (e.g. '/api')
-  if (API_BASE_URL.startsWith('/')) {
+  const baseWithoutTrailingSlash = API_BASE_URL.replace(/\/+$/, '')
+
+  // If base is relative (e.g. '/api' or '/api/v1')
+  if (baseWithoutTrailingSlash.startsWith('/')) {
     if (normalizedEndpoint.startsWith('/api')) {
       return normalizedEndpoint
     }
-    const cleanBase = API_BASE_URL.replace(/\/+$/, '')
+    const cleanBase = baseWithoutTrailingSlash.replace(/\/api(\/v\d+)?$/, '') || '/api'
     return `${cleanBase}${normalizedEndpoint}`
   }
 
-  // If API_BASE_URL is absolute (e.g. 'https://backend.com' or 'https://backend.com/api')
-  const baseWithoutTrailingSlash = API_BASE_URL.replace(/\/+$/, '')
+  // If base is absolute (e.g. 'https://backend.com', 'https://backend.com/api', 'https://backend.com/api/v1')
   if (normalizedEndpoint.startsWith('/api')) {
-    const rootDomain = baseWithoutTrailingSlash.replace(/\/api$/, '')
+    const rootDomain = baseWithoutTrailingSlash.replace(/\/api(\/v\d+)?$/, '')
     return `${rootDomain}${normalizedEndpoint}`
   }
-  const prefix = baseWithoutTrailingSlash.endsWith('/api')
-    ? baseWithoutTrailingSlash
-    : `${baseWithoutTrailingSlash}/api`
-  return `${prefix}${normalizedEndpoint}`
+
+  if (/\/api(\/v\d+)?$/.test(baseWithoutTrailingSlash)) {
+    return `${baseWithoutTrailingSlash}${normalizedEndpoint}`
+  }
+
+  return `${baseWithoutTrailingSlash}/api${normalizedEndpoint}`
 }
 
 export async function apiRequest<T>(

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { Video, Lock, Mail, User, Building, ArrowRight, Check } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -9,7 +9,11 @@ import { authService } from '../../services/authService'
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { setUser } = useAuthStore()
+
+  const redirectUrl = searchParams.get('redirect') || (location.state as any)?.from || '/app'
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -55,7 +59,7 @@ export const RegisterPage: React.FC = () => {
         avatarUrl: response.user.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
         status: 'active',
       })
-      navigate('/app')
+      navigate(redirectUrl)
     } catch (err: any) {
       setError(err?.message || 'Registration failed. Please check information.')
     } finally {
@@ -184,7 +188,10 @@ export const RegisterPage: React.FC = () => {
 
           <div className="pt-2 border-t border-[#EAECF0] text-center text-xs text-[#667085]">
             Already have an enterprise account?{' '}
-            <Link to="/login" className="font-semibold text-[#2563EB] hover:text-[#1D4ED8]">
+            <Link
+              to={`/login${redirectUrl !== '/app' ? `?redirect=${encodeURIComponent(redirectUrl)}` : ''}`}
+              className="font-semibold text-[#2563EB] hover:text-[#1D4ED8]"
+            >
               Sign in
             </Link>
           </div>

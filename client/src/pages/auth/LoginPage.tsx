@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { Video, Lock, Mail, ArrowRight, ShieldCheck, Check } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -9,7 +9,11 @@ import { authService } from '../../services/authService'
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { setUser, setUserName } = useAuthStore()
+
+  const redirectUrl = searchParams.get('redirect') || (location.state as any)?.from || '/app'
 
   const [email, setEmail] = useState('architect@intellmeet.io')
   const [password, setPassword] = useState('password123')
@@ -34,7 +38,7 @@ export const LoginPage: React.FC = () => {
         organizationId: response.user.organizationId,
         workspaceId: response.user.workspaceId,
       })
-      navigate('/app')
+      navigate(redirectUrl)
     } catch (err: any) {
       setError(err?.message || 'Invalid email or password.')
     } finally {
@@ -72,7 +76,7 @@ export const LoginPage: React.FC = () => {
               className="w-full justify-center text-xs text-[#344054] font-medium"
               onClick={() => {
                 setUserName('Enterprise User')
-                navigate('/app')
+                navigate(redirectUrl)
               }}
               icon={
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -180,7 +184,7 @@ export const LoginPage: React.FC = () => {
                     role: 'org_admin',
                     avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&h=120&q=80',
                   })
-                  navigate('/app')
+                  navigate(redirectUrl)
                 }}
                 className="p-2 text-left rounded-lg border border-[#EAECF0] hover:border-[#2563EB] hover:bg-[#EFF8FF] transition-all text-xs"
               >
@@ -197,7 +201,7 @@ export const LoginPage: React.FC = () => {
                     role: 'member',
                     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80',
                   })
-                  navigate('/app')
+                  navigate(redirectUrl)
                 }}
                 className="p-2 text-left rounded-lg border border-[#EAECF0] hover:border-[#2563EB] hover:bg-[#EFF8FF] transition-all text-xs"
               >
@@ -209,7 +213,10 @@ export const LoginPage: React.FC = () => {
 
           <div className="pt-2 border-t border-[#EAECF0] text-center text-xs text-[#667085]">
             Don't have an enterprise workspace?{' '}
-            <Link to="/register" className="font-semibold text-[#2563EB] hover:text-[#1D4ED8]">
+            <Link
+              to={`/register${redirectUrl !== '/app' ? `?redirect=${encodeURIComponent(redirectUrl)}` : ''}`}
+              className="font-semibold text-[#2563EB] hover:text-[#1D4ED8]"
+            >
               Create an account
             </Link>
           </div>

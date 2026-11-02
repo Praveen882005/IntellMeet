@@ -92,8 +92,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         localStorage.setItem('user_profile', JSON.stringify(newUser))
       } catch {}
+      const token = localStorage.getItem('access_token') || state.accessToken
       return {
         user: newUser,
+        accessToken: token,
         isAuthenticated: true,
       }
     }),

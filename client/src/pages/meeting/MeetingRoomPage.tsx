@@ -37,6 +37,7 @@ import { useMeetingStore } from '../../stores/meetingStore'
 import { useAuthStore } from '../../stores/authStore'
 import { aiService } from '../../services/aiService'
 import { meetingService } from '../../services/meetingService'
+import { authService } from '../../services/authService'
 import { ChatMessage } from '../../types'
 import { useToast } from '../../contexts/ToastContext'
 
@@ -155,7 +156,7 @@ export const MeetingRoomPage: React.FC = () => {
   const { roomId = 'sprint-room' } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()
-  const { user, setUserName, isAuthenticated } = useAuthStore()
+  const { user, setUser, setUserName, isAuthenticated } = useAuthStore()
   const { success, info, error: toastError } = useToast()
 
   // Store state
@@ -194,6 +195,41 @@ export const MeetingRoomPage: React.FC = () => {
   const [newName, setNewName] = useState(user.name)
   const [isHost, setIsHost] = useState(false)
   const [transcriptSearch, setTranscriptSearch] = useState('')
+
+  // In-Room Authentication state
+  const [signInModalOpen, setSignInModalOpen] = useState(false)
+  const [signInEmail, setSignInEmail] = useState('architect@intellmeet.io')
+  const [signInPassword, setSignInPassword] = useState('password123')
+  const [signInLoading, setSignInLoading] = useState(false)
+  const [signInError, setSignInError] = useState<string | null>(null)
+
+  const handleInRoomSignIn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSignInLoading(true)
+    setSignInError(null)
+
+    try {
+      const response = await authService.login({ email: signInEmail, password: signInPassword })
+      setUser({
+        id: response.user.id,
+        name: response.user.name,
+        email: response.user.email,
+        role: response.user.role,
+        avatarUrl: response.user.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
+        status: response.user.status || 'active',
+        organizationId: response.user.organizationId,
+        workspaceId: response.user.workspaceId,
+      })
+      setUserName(response.user.name)
+      socket?.emit('update-name', { roomId, userName: response.user.name })
+      success(`Signed in as ${response.user.name}. You are now verified in this meeting!`)
+      setSignInModalOpen(false)
+    } catch (err: any) {
+      setSignInError(err?.message || 'Invalid email or password.')
+    } finally {
+      setSignInLoading(false)
+    }
+  }
 
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -525,16 +561,23 @@ export const MeetingRoomPage: React.FC = () => {
             <span className="text-[10px] text-slate-400 font-mono">(Edit)</span>
           </button>
 
-          {!isAuthenticated && (
-            <Link to="/login">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs bg-[#2563EB]/20 border-[#2563EB]/40 text-[#60A5FA] hover:bg-[#2563EB]/30"
-              >
-                Sign in
-              </Button>
-            </Link>
+          {!isAuthenticated ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSignInError(null)
+                setSignInModalOpen(true)
+              }}
+              className="text-xs bg-[#2563EB]/20 border-[#2563EB]/40 text-[#60A5FA] hover:bg-[#2563EB]/30"
+            >
+              Sign in
+            </Button>
+          ) : (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
+              <Shield className="w-3 h-3 text-emerald-400" />
+              <span className="text-[11px] font-medium hidden sm:inline">Verified</span>
+            </div>
           )}
 
           <Button
@@ -1241,6 +1284,79 @@ export const MeetingRoomPage: React.FC = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+      {/* In-Meeting Live Authentication Modal */}
+      <Modal
+        isOpen={signInModalOpen}
+        onClose={() => setSignInModalOpen(false)}
+        title="Sign in to IntellMeet"
+        description="Authenticate without leaving your meeting. Your video, audio, and active session will continue uninterrupted."
+      >
+        <form onSubmit={handleInRoomSignIn} className="space-y-4 pt-2">
+          {signInError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+              {signInError}
+            </div>
+          )}
+
+          <Input
+            label="Work Email Address"
+            type="email"
+            value={signInEmail}
+            onChange={(e) => setSignInEmail(e.target.value)}
+            placeholder="architect@intellmeet.io"
+            required
+          />
+
+          <Input
+            label="Password"
+            type="password"
+            value={signInPassword}
+            onChange={(e) => setSignInPassword(e.target.value)}
+            placeholder="Enter password"
+            required
+          />
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <Link
+              to={`/login?redirect=${encodeURIComponent(`/room/${roomId}`)}`}
+              className="text-xs text-[#2563EB] hover:underline"
+              onClick={() => setSignInModalOpen(false)}
+            >
+              Open Full Sign In Page →
+            </Link>
+
+            <div className="flex gap-2 w-full sm:w-auto justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={() => setSignInModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                type="submit"
+                loading={signInLoading}
+              >
+                Sign In
+              </Button>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-[#EAECF0] text-center text-xs text-[#667085]">
+            Need a new account?{' '}
+            <Link
+              to={`/register?redirect=${encodeURIComponent(`/room/${roomId}`)}`}
+              className="font-semibold text-[#2563EB] hover:underline"
+              onClick={() => setSignInModalOpen(false)}
+            >
+              Sign up here
+            </Link>
+          </div>
+        </form>
       </Modal>
     </div>
   )

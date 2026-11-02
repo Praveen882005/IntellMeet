@@ -1,7 +1,8 @@
 import { Schema, model, Document } from 'mongoose'
 
 export interface IMessageDocument extends Document {
-  meetingId: Schema.Types.ObjectId
+  meetingId: any
+  meetingRoomId?: string
   workspaceId?: Schema.Types.ObjectId
   senderId?: Schema.Types.ObjectId
   senderName: string
@@ -25,9 +26,12 @@ export interface IMessageDocument extends Document {
 const MessageSchema = new Schema<IMessageDocument>(
   {
     meetingId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Meeting',
+      type: Schema.Types.Mixed,
       required: [true, 'Meeting ID is required'],
+      index: true,
+    },
+    meetingRoomId: {
+      type: String,
       index: true,
     },
     workspaceId: {
