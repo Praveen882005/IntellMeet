@@ -1,7 +1,7 @@
 import { Schema, model, Document } from 'mongoose'
 
 export interface IActionItemDocument extends Document {
-  meetingId: Schema.Types.ObjectId
+  meetingId: Schema.Types.Mixed
   meetingTitle?: string
   summaryId?: Schema.Types.ObjectId
   text: string
@@ -21,8 +21,7 @@ export interface IActionItemDocument extends Document {
 const ActionItemSchema = new Schema<IActionItemDocument>(
   {
     meetingId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Meeting',
+      type: Schema.Types.Mixed,
       required: [true, 'Meeting ID is required'],
       index: true,
     },

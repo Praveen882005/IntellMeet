@@ -52,7 +52,11 @@ export class OpenAiProvider implements IAiProvider {
         clearTimeout(timeoutId)
 
         if (response.status === 429) {
-          // Rate-limited: back off exponentially
+          const errorBody = await response.text()
+          if (errorBody.includes('insufficient_quota') || errorBody.includes('credit_balance_exhausted')) {
+            throw new Error('OpenAI credit balance exhausted. Add credits at platform.openai.com/settings/organization/billing/.')
+          }
+          // Transient rate-limit: back off exponentially
           const backoff = Math.pow(2, attempt) * 1000
           logger.warn(`⏳ OpenAI 429 Rate limited. Retrying attempt ${attempt}/${retries} in ${backoff}ms...`)
           await new Promise((resolve) => setTimeout(resolve, backoff))

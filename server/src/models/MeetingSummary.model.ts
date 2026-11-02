@@ -1,13 +1,13 @@
 import { Schema, model, Document } from 'mongoose'
 
 export interface IMeetingSummaryDocument extends Document {
-  meetingId: Schema.Types.ObjectId
+  meetingId: Schema.Types.Mixed
   executiveSummary: string
   keyDecisions: string[]
   topicsDiscussed: string[]
   nextSteps: string[]
   sentiment: 'positive' | 'neutral' | 'constructive' | 'mixed'
-  generatedBy: 'openai' | 'rule_based_nlp' | 'manual'
+  generatedBy: 'openai' | 'rule_based_nlp' | 'contextual_nlp' | 'manual'
   tokensUsed?: number
   processingDurationMs?: number
   createdAt: Date
@@ -17,8 +17,7 @@ export interface IMeetingSummaryDocument extends Document {
 const MeetingSummarySchema = new Schema<IMeetingSummaryDocument>(
   {
     meetingId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Meeting',
+      type: Schema.Types.Mixed,
       required: [true, 'Meeting ID is required'],
       unique: true,
       index: true,
@@ -47,8 +46,8 @@ const MeetingSummarySchema = new Schema<IMeetingSummaryDocument>(
     },
     generatedBy: {
       type: String,
-      enum: ['openai', 'rule_based_nlp', 'manual'],
-      default: 'rule_based_nlp',
+      enum: ['openai', 'rule_based_nlp', 'contextual_nlp', 'manual'],
+      default: 'contextual_nlp',
     },
     tokensUsed: {
       type: Number,
